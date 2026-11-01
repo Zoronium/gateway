@@ -1,0 +1,5 @@
+.env
+gateway.db
+gateway.db-wal
+gateway.db-shm
+dist/
