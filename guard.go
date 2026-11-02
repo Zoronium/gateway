@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -19,6 +20,29 @@ type guard struct {
 	key      string
 	hosts    map[string]bool
 	inflight chan struct{}
+	keys     *keyring // virtual keys; nil when there is no database
+}
+
+// ident says who is calling. The master key is "master". A virtual key carries its record, for limits.
+type ident struct {
+	ID  string
+	Key *keyRec
+}
+
+func identOf(r *http.Request) ident {
+	id, _ := r.Context().Value(identKey).(ident)
+	return id
+}
+
+// virtual reports whether the caller is a virtual key. Those may only chat and list their own models;
+// everything about the gateway itself is for the master key. A handler used without the guard sees no
+// identity and is trusted, because in production the guard always sits in front.
+func virtual(w http.ResponseWriter, r *http.Request) bool {
+	if identOf(r).Key == nil {
+		return false
+	}
+	jsonError(w, http.StatusForbidden, "admin_only", "This needs the master gateway key. Virtual keys can only call /v1/chat/completions and /v1/models.")
+	return true
 }
 
 // jsonError answers in the OpenAI error shape, so SDKs show a readable message.
@@ -35,6 +59,14 @@ func hostOnly(hostport string) string {
 		h = hh
 	}
 	return strings.ToLower(strings.Trim(h, "[]"))
+}
+
+func adminOnly(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !virtual(w, r) {
+			h(w, r)
+		}
+	}
 }
 
 // loadGuard reads GATEWAY_KEY, ALLOWED_HOSTS and MAX_INFLIGHT. With no key set it makes one for
@@ -64,7 +96,7 @@ func loadGuard(addr string) guard {
 	if n < 1 {
 		log.Fatal("MAX_INFLIGHT must be at least 1")
 	}
-	return guard{key, hosts, make(chan struct{}, n)}
+	return guard{key: key, hosts: hosts, inflight: make(chan struct{}, n)}
 }
 
 // wrap checks, in order and cheapest first: the Host header (blocks DNS rebinding), the key,
@@ -77,12 +109,24 @@ func (g guard) wrap(next http.Handler) http.Handler {
 			jsonError(w, http.StatusForbidden, "host_not_allowed", "This Host header is not allowed. Set ALLOWED_HOSTS on the gateway to add it.")
 			return
 		}
-		got, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if subtle.ConstantTimeCompare([]byte(got), []byte(g.key)) != 1 {
-			log.Printf("denied: bad or missing key from %s", r.RemoteAddr)
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			jsonError(w, http.StatusUnauthorized, "invalid_api_key", "Missing or wrong gateway key. Send it as Authorization: Bearer <GATEWAY_KEY>.")
-			return
+		// The admin page itself is a static file with no data in it. It asks for the key and then calls the API.
+		if !(r.Method == http.MethodGet && (r.URL.Path == "/admin" || r.URL.Path == "/admin/")) {
+			got, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			var who ident
+			if subtle.ConstantTimeCompare([]byte(got), []byte(g.key)) == 1 {
+				who = ident{ID: "master"}
+			} else if got != "" && g.keys != nil {
+				if rec, ok := g.keys.lookup(got); ok {
+					who = ident{ID: rec.ID, Key: rec}
+				}
+			}
+			if who.ID == "" {
+				log.Printf("denied: bad or missing key from %s", r.RemoteAddr)
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				jsonError(w, http.StatusUnauthorized, "invalid_api_key", "Missing or wrong gateway key. Send it as Authorization: Bearer <key>.")
+				return
+			}
+			r = r.WithContext(context.WithValue(r.Context(), identKey, who))
 		}
 		if r.Method == http.MethodPost {
 			if ct, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || ct != "application/json" {

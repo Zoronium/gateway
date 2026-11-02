@@ -20,6 +20,9 @@ Or build it yourself: `go build -trimpath .` (Go 1.27.3, pinned in `go.mod`).
 - **Filter:** scores new request text and tool results, blocks high scores with a 403 and flags medium ones. Details and limits in [RESULTS.md](RESULTS.md).
 - **Safety defaults:** bearer key required, Host allow-list, JSON only, request and scan limits, server timeouts.
 - **Stats:** `GET /v1/models`, `/v1/providers`, `/v1/stats` with error rates, stored in SQLite ([API.md](API.md)).
+- **Admin page:** `/admin` (sign in with `GATEWAY_KEY`): error rates, request log, virtual keys with allowed models and requests-per-minute limits, read-only settings.
+- **Logs for pipelines:** `ACCESS_LOG=stdout` writes one JSON line per request, never prompts or keys ([LOGGING.md](LOGGING.md)).
+- **Roadmap:** what is next and what waits is in [ROADMAP.md](ROADMAP.md).
 
 ## What it does not do
 

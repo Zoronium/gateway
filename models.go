@@ -244,6 +244,9 @@ func (a *api) listModels(w http.ResponseWriter, r *http.Request) {
 		}
 		have := map[string]bool{}
 		add := func(id string, isListed bool) {
+			if who := identOf(r); who.Key != nil && !who.Key.allows(name, id) {
+				return // a virtual key sees only the models it may use
+			}
 			e := modelEntry{ID: name + "/" + id, Object: "model", Created: refs[name].TS, OwnedBy: name, Provider: name, Model: id, Listed: isListed}
 			if row, found := byKey[name+"\x00"+id]; found {
 				e.Stats = row.json()

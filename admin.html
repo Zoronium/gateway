@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gateway admin</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #16191d; --muted: #5d6673; --line: #dfe3e8;
+  --accent: #1f5fd1; --accent-text: #ffffff; --ok: #1a7f4b; --warn: #a15c00; --bad: #c0282d;
+  --ok-bg: #e3f4ea; --warn-bg: #fdf0d9; --bad-bg: #fbe5e5; --grey-bg: #eceff2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216; --panel: #181c22; --text: #e8ebef; --muted: #98a2b0; --line: #2b323b;
+    --accent: #6b9cf2; --accent-text: #0b1220; --ok: #5ccf94; --warn: #f0b45a; --bad: #f07a7d;
+    --ok-bg: #12301f; --warn-bg: #352610; --bad-bg: #381819; --grey-bg: #242a32;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { background: var(--panel); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.brand { font-weight: 650; letter-spacing: .2px; margin-right: 8px; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav button { background: none; border: 0; border-radius: 6px; padding: 6px 12px; color: var(--muted); font: inherit; cursor: pointer; }
+nav button[aria-current="page"] { background: var(--grey-bg); color: var(--text); font-weight: 600; }
+.spacer { flex: 1; }
+main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+h2 { font-size: 17px; margin: 28px 0 10px; }
+h2:first-child { margin-top: 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card .n { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.card .l { color: var(--muted); font-size: 13px; }
+.tablewrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+td.num, th.num { text-align: right; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12.5px; background: var(--grey-bg); }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); }
+.muted { color: var(--muted); }
+.empty { padding: 18px; color: var(--muted); }
+code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 0; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 6px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+button.small { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+button.danger { color: var(--bad); border-color: var(--bad); }
+.callout { background: var(--ok-bg); border: 1px solid var(--ok); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
+.callout code { word-break: break-all; font-size: 14px; }
+.error { background: var(--bad-bg); border: 1px solid var(--bad); color: var(--bad); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.login { max-width: 380px; margin: 12vh auto; padding: 0 16px; }
+.login .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+.login input { width: 100%; }
+.bar2 { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; word-break: break-word; }
+@media (max-width: 560px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+const app = document.getElementById("app");
+let key = "";
+try { key = sessionStorage.getItem("gwkey") || ""; } catch (e) { /* storage blocked: sign in again each load */ }
+const state = { tab: "overview", since: "24h", timer: null };
+
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) e.append(c instanceof Node ? c : document.createTextNode(c == null ? "" : String(c)));
+  return e;
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, Object.assign({}, opts, { headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" } }));
+  const body = await r.json().catch(() => ({}));
+  if (r.status === 401) { signOut("That key was not accepted."); throw new Error("signed out"); }
+  if (!r.ok) throw new Error((body.error && body.error.message) || r.statusText);
+  return body;
+}
+
+function signOut(msg) {
+  key = "";
+  try { sessionStorage.removeItem("gwkey"); } catch (e) { /* ignore */ }
+  clearInterval(state.timer);
+  showLogin(msg);
+}
+
+function showLogin(msg) {
+  const input = h("input", { type: "password", id: "k", autocomplete: "off", placeholder: "GATEWAY_KEY", "aria-label": "Master gateway key", required: true });
+  const form = h("form", { onsubmit: async (ev) => {
+    ev.preventDefault();
+    key = input.value.trim();
+    try {
+      await api("/admin/api/summary?since=1h");
+      try { sessionStorage.setItem("gwkey", key); } catch (e) { /* ignore */ }
+      showApp();
+    } catch (e) { if (e.message !== "signed out") showLogin(e.message); }
+  } },
+    h("p", { class: "muted" }, "Sign in with the master GATEWAY_KEY. It stays in this tab only and is sent only to this server."),
+    msg ? h("div", { class: "error", role: "alert" }, msg) : "",
+    input, h("p", null, h("button", { class: "primary", type: "submit" }, "Sign in")));
+  app.replaceChildren(h("div", { class: "login" }, h("div", { class: "panel" }, h("h2", null, "Gateway admin"), form)));
+  input.focus();
+}
+
+const TABS = [["overview", "Overview"], ["keys", "Keys"], ["events", "Requests"], ["settings", "Settings"]];
+
+function showApp() {
+  const nav = h("nav", null, TABS.map(([id, label]) => h("button", { "aria-current": state.tab === id ? "page" : null, onclick: () => { state.tab = id; showApp(); } }, label)));
+  const since = h("select", { "aria-label": "Time range", onchange: (e) => { state.since = e.target.value; showApp(); } },
+    [["1h", "Last hour"], ["24h", "Last 24 hours"], ["7d", "Last 7 days"]].map(([v, l]) => h("option", { value: v, selected: v === state.since }, l)));
+  const view = h("main", { id: "view" }, h("p", { class: "muted" }, "Loading…"));
+  app.replaceChildren(
+    h("header", null, h("div", { class: "bar" }, h("span", { class: "brand" }, "Gateway"), nav, h("span", { class: "spacer" }), since,
+      h("button", { class: "small", onclick: () => signOut("") }, "Sign out"))),
+    view);
+  clearInterval(state.timer);
+  const draw = { overview, keys: keysView, events: eventsView, settings }[state.tab];
+  draw(view).catch((e) => { if (e.message !== "signed out") view.replaceChildren(h("div", { class: "error", role: "alert" }, e.message)); });
+}
+
+const pct = (x) => (x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 1) + "%";
+const fmtTime = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const tone = (res) => ({ ok: "ok", provider_error: "bad", blocked: "bad", rate_limited: "warn", model_denied: "warn", too_large: "warn" }[res] || "");
+const badge = (res) => h("span", { class: "badge " + tone(res) }, res.replace("_", " "));
+const card = (n, l) => h("div", { class: "card" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l));
+function table(head, rows, empty) {
+  if (!rows.length) return h("div", { class: "tablewrap" }, h("div", { class: "empty" }, empty));
+  return h("div", { class: "tablewrap" }, h("table", null,
+    h("thead", null, h("tr", null, head.map(([t, num]) => h("th", { class: num ? "num" : "", scope: "col" }, t)))),
+    h("tbody", null, rows.map((r) => h("tr", null, r.map((c, i) => h("td", { class: head[i][1] ? "num" : "" }, c)))))));
+}
+
+async function overview(view) {
+  const [s, p] = await Promise.all([api("/admin/api/summary?since=" + state.since), api("/v1/providers?since=" + state.since)]);
+  const r = s.by_result;
+  const refused = (r.rate_limited || 0) + (r.model_denied || 0) + (r.too_large || 0);
+  view.replaceChildren(
+    h("div", { class: "cards" },
+      card(s.requests, "requests"), card(r.blocked || 0, "blocked by filter"), card(s.flagged, "flagged (allowed)"),
+      card(refused, "refused by limits"), card(pct(s.provider_error_rate), "provider errors"), card(s.avg_total_ms + " ms", "average time")),
+    h("h2", null, "Providers"),
+    table([["Provider"], ["Models", 1], ["Tries", 1], ["Error rate", 1], ["Avg first byte", 1], ["Model list"]],
+      p.data.map((x) => [x.name, x.models, x.stats ? x.stats.requests : 0, x.stats ? pct(x.stats.error_rate) : "–",
+        x.stats && x.stats.avg_ttfb_ms != null ? x.stats.avg_ttfb_ms + " ms" : "–",
+        x.refresh_ok === false ? h("span", { class: "badge bad", title: x.refresh_error || "" }, "refresh failed") : h("span", { class: "badge ok" }, "ok")]),
+      "No providers."),
+    h("h2", null, "By key"),
+    table([["Key"], ["Requests", 1], ["Blocked", 1], ["Rate limited / model denied", 1]],
+      s.by_key.map((k) => [k.name || k.key, k.requests, k.blocked, k.limited_or_denied]), "No requests in this period."),
+    s.dropped ? h("p", { class: "muted" }, s.dropped + " events were dropped because the write queue was full.") : "");
+}
+
+async function keysView(view) {
+  const [list, s] = await Promise.all([api("/admin/api/keys"), api("/admin/api/summary?since=" + state.since)]);
+  const counts = {};
+  s.by_key.forEach((k) => { counts[k.key] = k.requests; });
+  const note = h("div", { id: "note" });
+  const name = h("input", { id: "kn", required: true, maxlength: 64, placeholder: "my app" });
+  const models = h("input", { id: "km", placeholder: "groq/*, ollama/qwen2.5:0.5b   (empty = all)", size: 38 });
+  const rpm = h("input", { id: "kr", type: "number", min: 0, value: 0, style: "width:110px" });
+  const form = h("form", { class: "row", onsubmit: async (ev) => {
+    ev.preventDefault();
+    try {
+      const out = await api("/admin/api/keys", { method: "POST", body: JSON.stringify({ name: name.value, models: models.value.split(","), rpm: Number(rpm.value) || 0 }) });
+      note.replaceChildren(h("div", { class: "callout", role: "status" },
+        h("strong", null, "Copy this key now. It is not stored and cannot be shown again."), h("p", null, h("code", null, out.key)),
+        h("button", { class: "small", type: "button", onclick: (e) => { navigator.clipboard.writeText(out.key).then(() => { e.target.textContent = "Copied"; }); } }, "Copy")));
+      name.value = ""; models.value = "";
+      refreshTable();
+    } catch (e) { if (e.message !== "signed out") note.replaceChildren(h("div", { class: "error", role: "alert" }, e.message)); }
+  } },
+    h("label", null, "Name", name), h("label", null, "Allowed models", models), h("label", null, "Requests per minute (0 = no limit)", rpm),
+    h("button", { class: "primary", type: "submit" }, "Create key"));
+  const holder = h("div");
+  function refreshTable() {
+    api("/admin/api/keys").then((l) => {
+      holder.replaceChildren(table([["Name"], ["Key"], ["Allowed models"], ["Per minute", 1], ["Requests", 1], ["Created"], ["Status"], [""]],
+        l.data.map((k) => [k.name, h("span", { class: "mono" }, k.prefix + "…  " + k.id), k.models.length ? k.models.join(", ") : "all", k.rpm || "no limit", counts[k.id] || 0,
+          fmtTime(k.created * 1000), k.revoked ? h("span", { class: "badge bad" }, "revoked") : h("span", { class: "badge ok" }, "active"),
+          k.revoked ? "" : h("button", { class: "small danger", onclick: async () => {
+            if (!confirm("Revoke " + k.name + "? It stops working immediately.")) return;
+            try { await api("/admin/api/keys/" + encodeURIComponent(k.id) + "/revoke", { method: "POST", body: "{}" }); refreshTable(); }
+            catch (e) { if (e.message !== "signed out") note.replaceChildren(h("div", { class: "error", role: "alert" }, e.message)); }
+          } }, "Revoke")]),
+        "No virtual keys yet. Create one above, then give each app its own."));
+    });
+  }
+  view.replaceChildren(h("h2", null, "Create a key"), form, note, h("h2", null, "Virtual keys"), holder,
+    h("p", { class: "muted" }, "Apps use these like the master key: Authorization: Bearer <key>. A virtual key can chat and list its own models, nothing else. The master key (GATEWAY_KEY) is not listed here."));
+  holder.replaceChildren(table([["Name"], ["Key"], ["Allowed models"], ["Per minute", 1], ["Requests", 1], ["Created"], ["Status"], [""]], [], ""));
+  refreshTable();
+}
+
+async function eventsView(view) {
+  const keys = await api("/admin/api/keys");
+  const result = h("select", { id: "fr", "aria-label": "Result" }, [["", "All results"], ["ok", "ok"], ["blocked", "blocked"], ["provider_error", "provider error"], ["rate_limited", "rate limited"], ["model_denied", "model denied"], ["too_large", "too large"], ["bad_request", "bad request"]].map(([v, l]) => h("option", { value: v }, l)));
+  const who = h("select", { id: "fk", "aria-label": "Key" }, [h("option", { value: "" }, "All keys"), h("option", { value: "master" }, "master key")].concat(keys.data.map((k) => h("option", { value: k.id }, k.name))));
+  const auto = h("input", { type: "checkbox", id: "auto", checked: true });
+  const holder = h("div");
+  async function load() {
+    const q = new URLSearchParams({ since: state.since, limit: 200 });
+    if (result.value) q.set("result", result.value);
+    if (who.value) q.set("key", who.value);
+    const out = await api("/admin/api/events?" + q);
+    const names = { master: "master key" };
+    keys.data.forEach((k) => { names[k.id] = k.name; });
+    holder.replaceChildren(table([["Time"], ["Key"], ["Model"], ["Provider"], ["Status", 1], ["Result"], ["Filter"], ["First byte", 1], ["Total", 1], ["Request id"]],
+      out.data.map((e) => [fmtTime(e.ts), names[e.key] || e.key, e.model || "–", e.provider || "–", e.status, badge(e.result),
+        e.filter ? h("span", { class: "badge " + (e.result === "blocked" ? "bad" : "warn"), title: e.rule || "" }, e.filter + " " + Number(e.score).toFixed(2)) : "–",
+        e.ttfb_ms + " ms", e.total_ms + " ms", h("span", { class: "mono" }, e.request_id)]), "No requests match."));
+  }
+  view.replaceChildren(h("div", { class: "bar2" }, h("label", null, "Result", result), h("label", null, "Key", who),
+    h("button", { class: "small", onclick: () => load().catch(() => {}) }, "Refresh"),
+    h("label", { style: "flex-direction:row;align-items:center;gap:6px" }, auto, "Refresh every 5 s")), holder);
+  result.onchange = who.onchange = () => load().catch(() => {});
+  await load();
+  state.timer = setInterval(() => { if (auto.checked) load().catch(() => {}); }, 5000);
+}
+
+async function settings(view) {
+  const c = await api("/admin/api/config");
+  const row = (k, v) => [h("dt", null, k), h("dd", null, v)];
+  view.replaceChildren(
+    h("p", { class: "muted" }, c.note),
+    h("dl", null, row("Listening on", c.listen), row("Allowed Host headers", c.allowed_hosts.join(", ")), row("Filters", c.filters.join(", ") || "none"),
+      row("Block at score", c.filter_block), row("Flag at score", c.filter_log), row("Scan system messages", c.scan_system_messages ? "yes" : "no"),
+      row("Scan limit", c.scan_limit_bytes ? Math.round(c.scan_limit_bytes / 1048576 * 10) / 10 + " MB of new text per request" : "none"),
+      row("Max requests at once", c.max_inflight), row("Database", c.database ? c.db_path + " (kept " + c.stats_days + " days)" : "off"), row("Access log", c.access_log)),
+    h("h2", null, "Providers"),
+    table([["Provider"], ["Base URL"], ["Key"]], c.providers.map((p) => [p.name, p.base_url, h("span", { class: "badge " + (p.key_set ? "ok" : "") }, p.key_set ? "set" : "none needed")]), "No providers."));
+}
+
+if (!/^https?:$/.test(location.protocol)) {
+  app.replaceChildren(h("div", { class: "login" }, h("div", { class: "panel" }, h("h2", null, "Open this from the gateway"),
+    h("p", null, "This page was opened as a file or preview, so it cannot reach the gateway. Start the gateway, then open its address in your browser, for example http://127.0.0.1:8080/admin."))));
+} else if (key) { api("/admin/api/summary?since=1h").then(showApp).catch(() => {}); } else { showLogin(""); }
+</script>
+</body>
+</html>

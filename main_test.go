@@ -149,8 +149,8 @@ func TestBadRequestsAndRoutes(t *testing.T) {
 			t.Fatalf("%s: status = %d, want 400", body, resp.StatusCode)
 		}
 	}
-	if resp, _ := http.Get(gw.URL + "/admin"); resp.StatusCode != 404 {
-		t.Fatalf("/admin status = %d, want 404", resp.StatusCode)
+	if resp, _ := http.Get(gw.URL + "/nothing-here"); resp.StatusCode != 404 {
+		t.Fatalf("unknown route status = %d, want 404", resp.StatusCode)
 	}
 	if resp, _ := http.Get(gw.URL + "/v1/chat/completions"); resp.StatusCode != 405 {
 		t.Fatalf("GET status = %d, want 405", resp.StatusCode)

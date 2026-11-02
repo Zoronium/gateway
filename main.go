@@ -6,8 +6,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,25 +87,38 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 	mux := http.NewServeMux()
 	info := newAPI(ps, st, client)
 	mux.HandleFunc("GET /v1/models", info.listModels)
-	mux.HandleFunc("GET /v1/providers", info.listProviders)
-	mux.HandleFunc("GET /v1/stats", info.getStats)
+	mux.HandleFunc("GET /v1/providers", adminOnly(info.listProviders))
+	mux.HandleFunc("GET /v1/stats", adminOnly(info.getStats))
+	newAdmin(st, ps, pol).routes(mux)
 	// ponytail: only chat completions. The key, host and size checks live in guard.go and wrap this handler.
-	mux.HandleFunc("POST /v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+	chat := func(w http.ResponseWriter, r *http.Request) {
+		ri, who := infoOf(r), identOf(r)
+		reqID := ri.id
+		if who.Key != nil && who.Key.RPM > 0 {
+			if ok, wait := st.keys.allow(who.Key.ID, who.Key.RPM); !ok {
+				ri.result = "rate_limited"
+				w.Header().Set("Retry-After", fmt.Sprint(int(wait.Seconds())+1))
+				jsonError(w, http.StatusTooManyRequests, "rate_limit_exceeded", fmt.Sprintf("This key is limited to %d requests per minute. Retry shortly (request %s).", who.Key.RPM, reqID))
+				return
+			}
+		}
 		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 		if err != nil {
+			ri.result = "too_large"
 			http.Error(w, "request body too large or unreadable", http.StatusRequestEntityTooLarge)
 			return
 		}
 		var body map[string]json.RawMessage
 		var model string
 		if json.Unmarshal(raw, &body) != nil || json.Unmarshal(body["model"], &model) != nil || model == "" {
+			ri.result = "bad_request"
 			http.Error(w, `body must be JSON with a "model" like provider/model`, http.StatusBadRequest)
 			return
 		}
-		id := make([]byte, 6)
-		rand.Read(id)
-		reqID := hex.EncodeToString(id)
-		w.Header().Set("X-Gateway-Request-Id", reqID)
+		ri.model = model
+		if len(ri.model) > 200 {
+			ri.model = ri.model[:200]
+		}
 		texts := newTexts(body["messages"], pol.scanSystem)
 		if pol.maxScan > 0 && len(pol.filters) > 0 {
 			// Fail closed: unscanned text must not be a way past the filter, so too much new text is refused.
@@ -116,6 +127,7 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 				total += len(t)
 			}
 			if total > pol.maxScan {
+				ri.result = "too_large"
 				log.Printf("req %s refused: %d bytes of new text is over the scan limit", reqID, total)
 				jsonError(w, http.StatusRequestEntityTooLarge, "scan_limit_exceeded", fmt.Sprintf("New content is %d KB, over the gateway's scan limit of %d KB, so it was not sent on (request %s). Raise SCAN_LIMIT_MB, or set FILTERS=none on the gateway.", total>>10, pol.maxScan>>10, reqID))
 				return
@@ -131,12 +143,15 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 			v = pol.check(texts)
 			<-scanSem
 		}
+		ri.v = v
 		if v.filter != "" && v.score >= pol.log {
 			if v.score >= pol.block {
+				ri.result = "blocked"
 				log.Printf("req %s BLOCK filter=%s rule=%s score=%.2f", reqID, v.filter, v.rule, v.score)
 				blocked(w, reqID, v)
 				return
 			}
+			ri.flagged = true
 			log.Printf("req %s FLAG filter=%s rule=%s score=%.2f", reqID, v.filter, v.rule, v.score)
 			w.Header().Set("X-Gateway-Flagged", fmt.Sprintf("%s=%.2f", v.filter, v.score))
 		}
@@ -145,7 +160,13 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 			name, m, ok := strings.Cut(strings.TrimSpace(c), "/")
 			p, found := ps[name]
 			if !ok || !found || m == "" {
+				ri.result = "bad_request"
 				http.Error(w, fmt.Sprintf("unknown provider in %q, use provider/model, configured: %s", c, names(ps)), http.StatusBadRequest)
+				return
+			}
+			if who.Key != nil && !who.Key.allows(name, m) {
+				ri.result = "model_denied"
+				jsonError(w, http.StatusForbidden, "model_not_allowed", fmt.Sprintf("This key may not use %s/%s (request %s).", name, m, reqID))
 				return
 			}
 			targets = append(targets, target{name, m, p})
@@ -166,11 +187,13 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 			start := time.Now()
 			resp, err := client.Do(req)
 			ttfb := time.Since(start).Milliseconds()
+			ri.provider, ri.ttfb = t.name, ttfb
 			switch {
 			case err != nil:
 				log.Printf("%s/%s unreachable: %v", t.name, t.model, err)
 				st.record(attempt{time.Now(), t.name, t.model, 0, classify(0, err), ttfb})
 				if last {
+					ri.result = "provider_error"
 					http.Error(w, "provider unreachable: "+t.name, http.StatusBadGateway)
 					return
 				}
@@ -185,10 +208,14 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 			if broke := pass(w, resp, t); broke && class == "ok" {
 				class = "stream_error" // the provider said 200 and then dropped the stream
 			}
+			if class != "ok" {
+				ri.result = "provider_error"
+			}
 			st.record(attempt{time.Now(), t.name, t.model, resp.StatusCode, class, ttfb})
 			return
 		}
-	})
+	}
+	mux.Handle("POST /v1/chat/completions", logged(st, chat))
 	return mux
 }
 
@@ -277,14 +304,30 @@ func main() {
 	if dbPath == "" {
 		dbPath = "gateway.db"
 	}
-	st, err := openStore(dbPath, int(envFloat("STATS_DAYS", 30)))
+	keepDays := int(envFloat("STATS_DAYS", 30))
+	st, err := openStore(dbPath, keepDays)
 	if err != nil {
 		// The proxy matters more than its stats, so it keeps running; /v1/models and friends answer 503.
+		// Without a database there are no virtual keys and no admin data, only the master key.
 		log.Printf("stats are off: %v", err)
 		st = nil
 	} else {
-		log.Printf("stats in %s, kept %d days", dbPath, int(envFloat("STATS_DAYS", 30)))
+		log.Printf("stats in %s, kept %d days", dbPath, keepDays)
+		g.keys = st.keys
 		startRefresher(ps, st, time.Duration(envFloat("MODELS_REFRESH_MIN", 60))*time.Minute)
 	}
+	spec := os.Getenv("ACCESS_LOG")
+	if access, err = openAccessLog(spec); err != nil {
+		log.Fatal(err)
+	} else if access != nil {
+		log.Printf("access log (one JSON line per request) to %s", spec)
+	}
+	var hosts []string
+	for h := range g.hosts {
+		hosts = append(hosts, h)
+	}
+	sort.Strings(hosts)
+	runtimeInfo = serverInfo{Listen: addr, MaxInflight: cap(g.inflight), Hosts: hosts, DBPath: dbPath, KeepDays: keepDays, AccessLog: spec}
+	log.Printf("admin page: http://%s/admin (sign in with GATEWAY_KEY)", addr)
 	log.Fatal(newServer(addr, g.wrap(newHandler(ps, pol, st))).ListenAndServe())
 }

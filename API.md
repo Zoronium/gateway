@@ -68,3 +68,18 @@ SQLite file `gateway.db` (change with `DB_PATH`). Per try: time, provider, model
 - One database connection, so reads and writes take turns.
 - If the database cannot be opened, the proxy keeps running and these endpoints answer `503`.
 - A client can send any model name, so names are cut to 200 characters. A caller with the key could still fill the table with made-up names; the 30-day clean-up bounds it.
+
+## Admin API (master key only)
+
+Used by the admin page at `/admin`. A virtual key gets 403 on all of these, and on `/v1/providers` and `/v1/stats`.
+
+| Endpoint | What |
+|---|---|
+| `GET /admin/api/summary?since=24h` | Requests by result and by key, flagged count, provider error rate, average time |
+| `GET /admin/api/events?since=24h&result=blocked&key=<id>&limit=100` | Recent requests, newest first |
+| `GET /admin/api/keys` | Virtual keys (never the secret) |
+| `POST /admin/api/keys` | `{"name":"my app","models":["groq/*"],"rpm":60}`. The secret is in the answer once |
+| `POST /admin/api/keys/{id}/revoke` | Stops a key at once |
+| `GET /admin/api/config` | How the gateway is set up. Read only, no secrets |
+
+Results: `ok`, `provider_error`, `blocked`, `rate_limited`, `model_denied`, `too_large`, `bad_request`.

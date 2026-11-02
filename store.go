@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -23,7 +24,15 @@ CREATE INDEX IF NOT EXISTS attempts_pm ON attempts(provider, model, ts);
 CREATE TABLE IF NOT EXISTS models (provider TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (provider, id));
 CREATE TABLE IF NOT EXISTS refreshes (
 	provider TEXT PRIMARY KEY, ts INTEGER NOT NULL, ok INTEGER NOT NULL,
-	error TEXT NOT NULL DEFAULT '', count INTEGER NOT NULL DEFAULT 0);`
+	error TEXT NOT NULL DEFAULT '', count INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS events (
+	ts INTEGER NOT NULL, req_id TEXT NOT NULL, key_id TEXT NOT NULL, model TEXT NOT NULL, provider TEXT NOT NULL,
+	status INTEGER NOT NULL, result TEXT NOT NULL, flagged INTEGER NOT NULL, filter TEXT NOT NULL, rule TEXT NOT NULL,
+	score REAL NOT NULL, ttfb_ms INTEGER NOT NULL, total_ms INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
+CREATE TABLE IF NOT EXISTS keys (
+	id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, prefix TEXT NOT NULL,
+	created INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, models TEXT NOT NULL DEFAULT '', rpm INTEGER NOT NULL DEFAULT 0);`
 
 // One row per try at a provider. A fallback chain makes one row per provider it tried.
 type attempt struct {
@@ -52,6 +61,8 @@ func classify(status int, err error) string {
 
 type store struct {
 	db      *sql.DB
+	keys    *keyring // virtual keys, cached in memory
+	evc     chan event
 	in      chan attempt
 	flushc  chan chan struct{}
 	quit    chan struct{}
@@ -71,7 +82,12 @@ func openStore(path string, keepDays int) (*store, error) {
 		db.Close()
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	s := &store{db: db, in: make(chan attempt, 1024), flushc: make(chan chan struct{}), quit: make(chan struct{}), done: make(chan struct{})}
+	s := &store{db: db, in: make(chan attempt, 1024), evc: make(chan event, 1024), flushc: make(chan chan struct{}), quit: make(chan struct{}), done: make(chan struct{})}
+	s.keys = newKeyring(s)
+	if err := s.keys.load(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("load keys: %w", err)
+	}
 	s.prune(keepDays)
 	go s.run(keepDays)
 	return s, nil
@@ -93,21 +109,39 @@ func (s *store) record(a attempt) {
 	}
 }
 
-// run writes queued attempts in batches, once a second or every 200 rows.
+// recordEvent queues one request event the same way record queues an attempt. Safe on a nil store.
+func (s *store) recordEvent(e event) {
+	if s == nil {
+		return
+	}
+	select {
+	case s.evc <- e:
+	default:
+		s.dropped.Add(1)
+	}
+}
+
+// run writes queued attempts and events in batches, once a second or every 200 rows.
 func (s *store) run(keepDays int) {
 	defer close(s.done)
 	tick, pruneTick := time.NewTicker(time.Second), time.NewTicker(time.Hour)
 	defer tick.Stop()
 	defer pruneTick.Stop()
 	var batch []attempt
+	var evs []event
 	write := func() {
-		if len(batch) == 0 {
-			return
+		if len(batch) > 0 {
+			if err := s.insert(batch); err != nil {
+				log.Printf("stats: %d attempts lost: %v", len(batch), err)
+			}
+			batch = batch[:0]
 		}
-		if err := s.insert(batch); err != nil {
-			log.Printf("stats: %d attempts lost: %v", len(batch), err)
+		if len(evs) > 0 {
+			if err := s.insertEvents(evs); err != nil {
+				log.Printf("stats: %d events lost: %v", len(evs), err)
+			}
+			evs = evs[:0]
 		}
-		batch = batch[:0]
 	}
 	for {
 		select {
@@ -115,11 +149,17 @@ func (s *store) run(keepDays int) {
 			if batch = append(batch, a); len(batch) >= 200 {
 				write()
 			}
+		case e := <-s.evc:
+			if evs = append(evs, e); len(evs) >= 200 {
+				write()
+			}
 		case ack := <-s.flushc:
 			for drained := false; !drained; {
 				select {
 				case a := <-s.in:
 					batch = append(batch, a)
+				case e := <-s.evc:
+					evs = append(evs, e)
 				default:
 					drained = true
 				}
@@ -177,9 +217,150 @@ func (s *store) insert(batch []attempt) error {
 // prune drops attempts older than keepDays so the file cannot grow without bound.
 func (s *store) prune(keepDays int) {
 	cutoff := time.Now().AddDate(0, 0, -keepDays).Unix()
-	if _, err := s.db.Exec(`DELETE FROM attempts WHERE ts < ?`, cutoff); err != nil {
-		log.Printf("stats: prune failed: %v", err)
+	for _, table := range []string{"attempts", "events"} {
+		if _, err := s.db.Exec(`DELETE FROM `+table+` WHERE ts < ?`, cutoff); err != nil {
+			log.Printf("stats: prune of %s failed: %v", table, err)
+		}
 	}
+}
+
+func (s *store) insertEvents(batch []event) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare(`INSERT INTO events (ts, req_id, key_id, model, provider, status, result, flagged, filter, rule, score, ttfb_ms, total_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+	for _, e := range batch {
+		fl := 0
+		if e.Flagged {
+			fl = 1
+		}
+		if _, err := stmt.Exec(e.TS.Unix(), e.ReqID, e.Key, e.Model, e.Provider, e.Status, e.Result, fl, e.Filter, e.Rule, e.Score, e.TTFBMS, e.TotalMS); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// listEvents returns the newest events first. An empty result or key means any.
+func (s *store) listEvents(since time.Time, result, key string, limit int) ([]event, error) {
+	q := `SELECT ts, req_id, key_id, model, provider, status, result, flagged, filter, rule, score, ttfb_ms, total_ms FROM events WHERE ts >= ?`
+	args := []any{since.Unix()}
+	if result != "" {
+		q += ` AND result = ?`
+		args = append(args, result)
+	}
+	if key != "" {
+		q += ` AND key_id = ?`
+		args = append(args, key)
+	}
+	rows, err := s.db.Query(q+` ORDER BY ts DESC, rowid DESC LIMIT ?`, append(args, limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []event{}
+	for rows.Next() {
+		var e event
+		var ts int64
+		var fl int
+		if err := rows.Scan(&ts, &e.ReqID, &e.Key, &e.Model, &e.Provider, &e.Status, &e.Result, &fl, &e.Filter, &e.Rule, &e.Score, &e.TTFBMS, &e.TotalMS); err != nil {
+			return nil, err
+		}
+		e.TS, e.Flagged = time.Unix(ts, 0).UTC(), fl == 1
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+type resultCount struct {
+	Result  string
+	Count   int
+	Flagged int
+	AvgMS   float64
+}
+
+type keyCount struct {
+	Key             string
+	Count, Blocked  int
+	LimitedOrDenied int
+}
+
+// eventSummary counts events by result and by key since a time.
+func (s *store) eventSummary(since time.Time) ([]resultCount, []keyCount, error) {
+	rows, err := s.db.Query(`SELECT result, COUNT(*), COALESCE(SUM(flagged),0), COALESCE(AVG(total_ms),0) FROM events WHERE ts >= ? GROUP BY result ORDER BY result`, since.Unix())
+	if err != nil {
+		return nil, nil, err
+	}
+	var byResult []resultCount
+	for rows.Next() {
+		var r resultCount
+		if err := rows.Scan(&r.Result, &r.Count, &r.Flagged, &r.AvgMS); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		byResult = append(byResult, r)
+	}
+	rows.Close()
+	rows, err = s.db.Query(`SELECT key_id, COUNT(*), COALESCE(SUM(result='blocked'),0), COALESCE(SUM(result IN ('rate_limited','model_denied')),0) FROM events WHERE ts >= ? GROUP BY key_id ORDER BY COUNT(*) DESC`, since.Unix())
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	var byKey []keyCount
+	for rows.Next() {
+		var k keyCount
+		if err := rows.Scan(&k.Key, &k.Count, &k.Blocked, &k.LimitedOrDenied); err != nil {
+			return nil, nil, err
+		}
+		byKey = append(byKey, k)
+	}
+	return byResult, byKey, rows.Err()
+}
+
+func (s *store) insertKey(r keyRec, hash string) error {
+	_, err := s.db.Exec(`INSERT INTO keys (id, name, hash, prefix, created, revoked, models, rpm) VALUES (?,?,?,?,?,0,?,?)`,
+		r.ID, r.Name, hash, r.Prefix, r.Created.Unix(), strings.Join(r.Models, ","), r.RPM)
+	return err
+}
+
+func (s *store) setRevoked(id string) (bool, error) {
+	res, err := s.db.Exec(`UPDATE keys SET revoked = 1 WHERE id = ? AND revoked = 0`, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n == 1, nil
+}
+
+// allKeys returns every key, revoked ones included, with the hash for the cache.
+func (s *store) allKeys() (recs []keyRec, hashes []string, err error) {
+	rows, err := s.db.Query(`SELECT id, name, hash, prefix, created, revoked, models, rpm FROM keys ORDER BY created, id`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r keyRec
+		var h, models string
+		var created int64
+		var revoked int
+		if err := rows.Scan(&r.ID, &r.Name, &h, &r.Prefix, &created, &revoked, &models, &r.RPM); err != nil {
+			return nil, nil, err
+		}
+		r.Created, r.Revoked = time.Unix(created, 0).UTC(), revoked == 1
+		if models != "" {
+			r.Models = strings.Split(models, ",")
+		}
+		recs, hashes = append(recs, r), append(hashes, h)
+	}
+	return recs, hashes, rows.Err()
 }
 
 // statRow is the outcome count for one provider, or one provider and model.
