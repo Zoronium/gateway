@@ -3,3 +3,8 @@ gateway.db
 gateway.db-wal
 gateway.db-shm
 dist/
+
+# design tooling state: screenshots and the development-only direction brief
+.impeccable/review/
+.impeccable/surfaces/
+.impeccable/live/
