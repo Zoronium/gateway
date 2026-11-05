@@ -3,67 +3,237 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>Gateway admin</title>
 <style>
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --text: #16191d; --muted: #5d6673; --line: #dfe3e8;
-  --accent: #1f5fd1; --accent-text: #ffffff; --ok: #1a7f4b; --warn: #a15c00; --bad: #c0282d;
-  --ok-bg: #e3f4ea; --warn-bg: #fdf0d9; --bad-bg: #fbe5e5; --grey-bg: #eceff2;
+  color-scheme: dark;
+  --bg: #0a0d14; --s1: #0f141f; --s2: #161e2e; --s3: #1c2638;
+  --line: #1e293b; --line2: #2b3a52;
+  --text: #f1f5f9; --muted: #98a6bb; --faint: #7d8ba1;
+  --violet: #6366f1; --violet-ink: #c7caff; --on-violet: #ffffff; --violet-btn: #5558e8;
+  --cyan: #22c7e6; --ok: #34d399; --warn: #fbbf24; --bad: #f87171; --rose: #fb7185;
+  --sans: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
 }
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --bg: #0f1216; --panel: #181c22; --text: #e8ebef; --muted: #98a2b0; --line: #2b323b;
-    --accent: #6b9cf2; --accent-text: #0b1220; --ok: #5ccf94; --warn: #f0b45a; --bad: #f07a7d;
-    --ok-bg: #12301f; --warn-bg: #352610; --bad-bg: #381819; --grey-bg: #242a32;
+    color-scheme: light;
+    --bg: #f2f4f9; --s1: #ffffff; --s2: #eef1f7; --s3: #e4e9f3;
+    --line: #dce2ed; --line2: #c3cddf;
+    --text: #0f172a; --muted: #46546a; --faint: #5b6a80;
+    --violet: #4f46e5; --violet-ink: #3730a3; --on-violet: #ffffff; --violet-btn: #4f46e5;
+    --cyan: #0e7490; --ok: #046245; --warn: #8f420d; --bad: #b91c1c; --rose: #be123c;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-header { background: var(--panel); border-bottom: 1px solid var(--line); }
-.bar { max-width: 1100px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
-.brand { font-weight: 650; letter-spacing: .2px; margin-right: 8px; }
-nav { display: flex; gap: 4px; flex-wrap: wrap; }
-nav button { background: none; border: 0; border-radius: 6px; padding: 6px 12px; color: var(--muted); font: inherit; cursor: pointer; }
-nav button[aria-current="page"] { background: var(--grey-bg); color: var(--text); font-weight: 600; }
-.spacer { flex: 1; }
-main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
-h2 { font-size: 17px; margin: 28px 0 10px; }
-h2:first-child { margin-top: 0; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-.card .n { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.card .l { color: var(--muted); font-size: 13px; }
-.tablewrap { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-tr:last-child td { border-bottom: 0; }
-th { color: var(--muted); font-weight: 600; font-size: 13px; }
-td.num, th.num { text-align: right; }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12.5px; background: var(--grey-bg); }
-.badge.ok { background: var(--ok-bg); color: var(--ok); }
-.badge.warn { background: var(--warn-bg); color: var(--warn); }
-.badge.bad { background: var(--bad-bg); color: var(--bad); }
+html { scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 var(--sans); caret-color: var(--violet); -webkit-font-smoothing: antialiased; }
+::selection { background: color-mix(in srgb, var(--violet) 40%, transparent); }
+button, input, select { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+.mono { font-family: var(--mono); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.t-warn { color: var(--warn); }
+.keycell { font-weight: 500; }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
 .muted { color: var(--muted); }
-.empty { padding: 18px; color: var(--muted); }
-code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
-form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 0; }
-input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-button.primary { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 6px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; }
-button.small { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
-button.danger { color: var(--bad); border-color: var(--bad); }
-.callout { background: var(--ok-bg); border: 1px solid var(--ok); border-radius: 10px; padding: 12px 14px; margin: 12px 0; }
-.callout code { word-break: break-all; font-size: 14px; }
-.error { background: var(--bad-bg); border: 1px solid var(--bad); color: var(--bad); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
-.login { max-width: 380px; margin: 12vh auto; padding: 0 16px; }
-.login .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
-.login input { width: 100%; }
-.bar2 { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
-dt { color: var(--muted); }
-dd { margin: 0; word-break: break-word; }
-@media (max-width: 560px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } }
+.faint { color: var(--faint); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* shell */
+.shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); min-height: 100dvh; }
+.rail { position: sticky; top: 0; height: 100dvh; display: flex; flex-direction: column; gap: 4px; padding: 14px 10px; background: var(--s1); border-right: 1px solid var(--line); }
+.brand { display: flex; align-items: baseline; gap: 8px; padding: 4px 10px 16px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.brand span { font: 500 11px var(--mono); color: var(--faint); }
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav a { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 6px; color: var(--muted); font-weight: 500; transition: background-color .15s, color .15s; }
+.nav a:hover { background: var(--s2); color: var(--text); }
+.nav a[aria-current="page"] { background: color-mix(in srgb, var(--violet) 16%, transparent); color: var(--violet-ink); }
+.nav svg { flex: none; }
+.rail-foot { margin-top: auto; padding: 12px 10px 4px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; display: grid; gap: 4px; }
+.rail-foot b { color: var(--text); font-weight: 500; }
+.main { min-width: 0; }
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 24px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; min-width: 92px; }
+.search { position: relative; flex: 1 1 280px; max-width: 460px; }
+.search svg { position: absolute; left: 10px; top: 8px; color: var(--faint); pointer-events: none; }
+.search input[type="text"] { width: 100%; height: 32px; padding: 0 34px 0 32px; background: var(--s1); border: 1px solid var(--line); border-radius: 4px; }
+.search input::placeholder { color: var(--faint); }
+.search kbd { position: absolute; right: 8px; top: 6px; font: 500 11px var(--mono); color: var(--faint); border: 1px solid var(--line2); border-radius: 3px; padding: 0 5px; line-height: 18px; }
+.spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; background: var(--s1); overflow: hidden; }
+.seg button { height: 30px; padding: 0 11px; border: 0; background: none; color: var(--muted); font: 500 12px var(--sans); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button:hover { color: var(--text); background: var(--s2); }
+.seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: color-mix(in srgb, var(--violet) 22%, transparent); color: var(--violet-ink); }
+.live { display: inline-flex; align-items: center; gap: 7px; }
+.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.live[aria-pressed="true"] i { background: var(--ok); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--line2); background: var(--s1); color: var(--text); font-weight: 500; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.btn:hover { background: var(--s2); border-color: var(--line2); }
+.btn.primary { background: var(--violet-btn); border-color: var(--violet-btn); color: var(--on-violet); }
+.btn.primary:hover { background: color-mix(in srgb, var(--violet-btn) 85%, #000); }
+.btn.small { height: 26px; padding: 0 9px; font-size: 12px; }
+.btn.danger { color: var(--muted); }
+.btn.danger:hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, transparent); }
+.btn.danger.armed { background: var(--bad); color: #fff; border-color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: default; }
+.content { padding: 20px 24px 64px; max-width: 1600px; display: grid; gap: 20px; align-content: start; }
+
+/* panels and tables */
+.panel { background: var(--s1); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.panel > header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); min-height: 48px; }
+.panel h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.panel .body { padding: 16px; }
+.panel header .spacer + a, .link { color: var(--violet-ink); font-weight: 500; }
+.link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; }
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th.num { text-align: right; }
+td { padding: 0 12px; height: 36px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--s2); }
+tr.row { cursor: pointer; }
+tr.row:focus-visible { outline-offset: -2px; }
+tr.sel td { background: color-mix(in srgb, var(--violet) 12%, transparent); }
+.trunc { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.b { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; font-weight: 500; background: var(--s3); color: var(--muted); }
+.b.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.b.warn { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.b.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.b.violet { background: color-mix(in srgb, var(--violet) 18%, transparent); color: var(--violet-ink); }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border-radius: 4px; background: var(--s2); border: 1px solid var(--line); color: var(--muted); font: 500 11px var(--mono); }
+.bar { display: inline-block; vertical-align: middle; width: 64px; height: 5px; border-radius: 2px; background: var(--s3); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--cyan); }
+.bar.bad i { background: var(--bad); } .bar.warn i { background: var(--warn); } .bar.ok i { background: var(--ok); }
+.bar i + i { background: color-mix(in srgb, var(--cyan) 38%, transparent); }
+.rule .bar i + i { background: var(--warn); }
+.bar.split { display: inline-flex; }
+.empty { padding: 28px 16px; color: var(--muted); text-align: center; }
+.empty strong { display: block; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+.empty pre { margin: 14px auto 0; max-width: 560px; text-align: left; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; font: 12px/1.6 var(--mono); color: var(--muted); }
+.err { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--bad) 50%, transparent); background: color-mix(in srgb, var(--bad) 10%, transparent); border-radius: 6px; color: var(--bad); }
+.err .spacer { flex: 1; }
+.sk { display: block; height: 10px; border-radius: 3px; background: var(--s3); animation: pulse 1.6s ease-in-out infinite; }
+
+/* metric strip */
+.strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.m { display: block; padding: 14px 16px 12px; background: var(--s1); min-width: 0; transition: background-color .15s; }
+.m:hover { background: var(--s2); }
+.m .l { color: var(--muted); font-weight: 500; white-space: nowrap; }
+.m .v { margin: 4px 0 2px; font-size: 24px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.m .v small { font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.m .d { font-size: 12px; color: var(--faint); }
+.m .d.up-bad { color: var(--warn); } .m .d.up-good { color: var(--ok); }
+.m.alert .v { color: var(--rose); }
+
+/* chart */
+.chart { position: relative; padding: 8px 8px 0; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart text { fill: var(--faint); font: 10.5px var(--mono); }
+.legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; }
+.lg-c { background: var(--cyan); }
+.lg-r { background: var(--rose); }
+.lg-w { background: var(--warn); opacity: .6; }
+a.link + .b { margin-left: 8px; }
+.statusline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 14px; line-height: 1.5; }
+.statusline b { font-weight: 600; }
+.pair { display: grid; gap: 2px; }
+td.empty { white-space: normal; }
+.legend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.tip { position: absolute; z-index: 5; pointer-events: none; min-width: 168px; padding: 8px 10px; background: var(--s3); border: 1px solid var(--line2); border-radius: 6px; box-shadow: 0 8px 20px -6px rgba(0,0,0,.45); font-size: 12px; }
+.tip b { display: block; margin-bottom: 4px; font-weight: 600; }
+.tip div { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); }
+.tip div span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
+.chart .none { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--muted); pointer-events: none; }
+
+/* forms and filters */
+.bar2 { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label, .field .lab { color: var(--muted); font-weight: 500; font-size: 12px; }
+.field .hint { color: var(--faint); font-size: 12px; }
+input[type="text"], input[type="password"], input[type="number"], select { height: 32px; padding: 0 10px; background: var(--bg); border: 1px solid var(--line2); border-radius: 4px; min-width: 0; }
+input::placeholder { color: var(--faint); }
+select { padding-right: 26px; }
+.formrow { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(240px, 2fr) 150px 150px auto; gap: 14px; align-items: start; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+button.chip { cursor: pointer; } button.chip:hover { color: var(--text); border-color: var(--line2); }
+.callout { padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--ok) 50%, transparent); background: color-mix(in srgb, var(--ok) 9%, transparent); border-radius: 8px; display: grid; gap: 8px; }
+.callout code { display: block; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font: 13px var(--mono); word-break: break-all; user-select: all; }
+.active-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.active-filters .chip { height: 26px; padding: 0 4px 0 9px; }
+.active-filters .chip button { all: unset; cursor: pointer; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 3px; color: var(--faint); }
+.active-filters .chip button:hover { background: var(--s3); color: var(--text); }
+
+/* scale (filter thresholds) */
+.scale { position: relative; height: 10px; border-radius: 3px; background: linear-gradient(to right, var(--s3) 0 var(--a), color-mix(in srgb, var(--warn) 55%, var(--s3)) var(--a) var(--b), color-mix(in srgb, var(--bad) 65%, var(--s3)) var(--b) 100%); }
+.scale i { position: absolute; top: -4px; width: 2px; height: 18px; background: var(--text); border-radius: 1px; }
+.scale-l { position: relative; height: 16px; margin-top: 6px; color: var(--faint); font: 11px var(--mono); }
+.scale-l span { position: absolute; top: 0; white-space: nowrap; transform: translateX(-50%); }
+.scale-l span:first-child { transform: none; }
+.scale-l span:last-child { transform: translateX(-100%); }
+.rules { display: grid; }
+.rule .mono { white-space: nowrap; }
+.rule { display: grid; grid-template-columns: minmax(150px, max-content) minmax(60px, 1fr) auto; gap: 14px; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--line); }
+.rule:last-child { border-bottom: 0; }
+.rule .bar { width: 100%; height: 6px; } .rule .bar i { background: var(--rose); }
+dl.kv { display: grid; grid-template-columns: minmax(150px, 220px) 1fr; margin: 0; }
+dl.kv dt, dl.kv dd { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+dl.kv dt { color: var(--muted); } dl.kv dd { min-width: 0; word-break: break-word; }
+dl.kv > :nth-last-child(-n+2) { border-bottom: 0; }
+
+/* inspector */
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(440px, 100vw); display: flex; flex-direction: column; background: var(--s1); border-left: 1px solid var(--line2); box-shadow: -18px 0 44px -14px rgba(0,0,0,.55); transform: translateX(104%); transition: transform .2s cubic-bezier(.16, 1, .3, 1); visibility: hidden; }
+.drawer.open { transform: none; visibility: visible; }
+.alist { display: grid; }
+.arow { display: grid; gap: 5px; padding: 10px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.arow:last-child { border-bottom: 0; }
+.arow:hover { background: var(--s2); }
+.arow.sel { background: color-mix(in srgb, var(--violet) 12%, transparent); }
+.arow:focus-visible { outline-offset: -2px; }
+.a1, .a2 { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.a2 { font-size: 12px; color: var(--muted); }
+.a1 .grow { flex: 1; }
+.a1 .b { min-width: 96px; justify-content: center; }
+.a1 .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: none; }
+.a1 .faint { white-space: nowrap; flex: none; }
+.stack { display: grid; gap: 20px; align-content: start; min-width: 0; }
+.a1 .trunc { flex: 0 1 auto; min-width: 0; }
+.drawer header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.drawer header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.drawer .scroll { overflow: auto; padding: 16px; display: grid; gap: 18px; align-content: start; }
+.drawer h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.why { margin: 0; padding: 12px 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; line-height: 1.55; }
+.dr { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 0; }
+.dr dt { color: var(--muted); } .dr dd { margin: 0; min-width: 0; word-break: break-word; }
+.span { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--s3); }
+.span i { display: block; height: 100%; }
+.span i:first-child { background: var(--cyan); } .span i + i { background: color-mix(in srgb, var(--cyan) 38%, transparent); }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+@media (min-width: 1181px) { .strip.seven { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+.strip > :nth-child(7):last-child { grid-column: auto; }
+@media (max-width: 1180px) { .strip > :nth-child(7):last-child { grid-column: 1 / -1; } }
+@media (max-width: 1180px) { .strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cols { grid-template-columns: 1fr; } .formrow { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand { padding: 0 6px 0 0; width: 100%; } .nav { flex-direction: row; flex-wrap: wrap; } .nav a { padding: 0 10px; white-space: nowrap; } .rail-foot { display: none; }
+  .top { padding: 8px 12px; flex-wrap: wrap; } .top h1 { display: none; } .search { flex-basis: 100%; max-width: none; order: 5; }
+  .content { padding: 16px 12px 48px; }
+}
+.msub { display: none; }
+@media (max-width: 700px) { .hm { display: none; } .trunc { max-width: 150px; } .msub { display: block; max-width: 160px; white-space: normal; overflow-wrap: anywhere; font-weight: 400; color: var(--faint); } }
+@media (max-width: 560px) { .ptbl .bar, .ptbl .fb { display: none; } .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .formrow { grid-template-columns: 1fr; } dl.kv { grid-template-columns: 1fr; } dl.kv dt { padding-bottom: 0; border-bottom: 0; } .rule { grid-template-columns: 1fr auto; } .rule .bar { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+.login { max-width: 400px; margin: 14vh auto 0; padding: 0 16px; }
+.login .panel .body { display: grid; gap: 14px; }
+.login h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 </style>
 </head>
 <body>
@@ -71,10 +241,16 @@ dd { margin: 0; word-break: break-word; }
 <script>
 "use strict";
 const app = document.getElementById("app");
-let key = "";
-try { key = sessionStorage.getItem("gwkey") || ""; } catch (e) { /* storage blocked: sign in again each load */ }
-const state = { tab: "overview", since: "24h", timer: null };
+const NS = "http://www.w3.org/2000/svg";
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked: the choice lasts until reload */ } },
+};
+const S = { key: "", since: store.get("gw.since", "24h"), live: store.get("gw.live", "1") === "1", route: "overview", params: {}, cfg: null, keys: [], page: null, timer: null };
+try { S.key = sessionStorage.getItem("gwkey") || ""; } catch (e) { /* sign in again each load */ }
+if (!["1h", "24h", "7d"].includes(S.since)) S.since = "24h";
 
+/* ---------- building blocks ---------- */
 function h(tag, props, ...kids) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -82,175 +258,609 @@ function h(tag, props, ...kids) {
     else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
     else if (v !== false && v != null) e.setAttribute(k, v === true ? "" : v);
   }
-  for (const c of kids.flat()) e.append(c instanceof Node ? c : document.createTextNode(c == null ? "" : String(c)));
+  for (const c of kids.flat(2)) if (c !== false && c != null) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return e;
 }
+function sv(tag, attrs, ...kids) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  for (const c of kids.flat()) if (c) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return e;
+}
+const ICONS = {
+  overview: [["rect", { x: 2, y: 2, width: 5, height: 5, rx: 1 }], ["rect", { x: 9, y: 2, width: 5, height: 5, rx: 1 }], ["rect", { x: 2, y: 9, width: 5, height: 5, rx: 1 }], ["rect", { x: 9, y: 9, width: 5, height: 5, rx: 1 }]],
+  requests: [["path", { d: "M2 4h12M2 8h12M2 12h8" }]],
+  threats: [["path", { d: "M8 1.8 13 3.6V8c0 3-2.2 4.9-5 6-2.8-1.1-5-3-5-6V3.6z" }]],
+  keys: [["circle", { cx: 5, cy: 10.5, r: 2.7 }], ["path", { d: "m7 8.5 6-6M11 4.5l1.8 1.8M9.2 6.3l1.4 1.4" }]],
+  providers: [["rect", { x: 2, y: 3, width: 12, height: 4, rx: 1 }], ["rect", { x: 2, y: 9, width: 12, height: 4, rx: 1 }]],
+  settings: [["path", { d: "M2 5h6M11 5h3M2 11h3M8 11h6" }], ["circle", { cx: 9.5, cy: 5, r: 1.5 }], ["circle", { cx: 6.5, cy: 11, r: 1.5 }]],
+  search: [["circle", { cx: 7, cy: 7, r: 4.5 }], ["path", { d: "m10.5 10.5 3.5 3.5" }]],
+  close: [["path", { d: "m3.5 3.5 9 9m0-9-9 9" }]],
+  copy: [["rect", { x: 5, y: 5, width: 8, height: 8, rx: 1.5 }], ["path", { d: "M3 10.5V4A1.5 1.5 0 0 1 4.5 2.5H11" }]],
+  refresh: [["path", { d: "M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" }]],
+  check: [["path", { d: "m3 8.5 3.2 3L13 4.5" }]],
+};
+function ic(name, size = 16) {
+  return sv("svg", { width: size, height: size, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": "1.5", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
+    (ICONS[name] || []).map(([t, a]) => sv(t, a)));
+}
+
+const nf = new Intl.NumberFormat();
+const fmt = (n) => nf.format(n);
+const ms = (n) => (n >= 10000 ? (n / 1000).toFixed(1) + " s" : fmt(Math.round(n)) + " ms");
+const money = (v) => "$" + (v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v.toFixed(4));
+const pct = (x) => (x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 1) + "%";
+function rel(t) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return s + " s ago";
+  if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago";
+  return Math.floor(s / 86400) + " d ago";
+}
+const absTime = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function uptime(since) {
+  const s = Math.max(0, Math.round(Date.now() / 1000 - since));
+  if (s < 3600) return Math.max(1, Math.floor(s / 60)) + " min";
+  if (s < 86400) return Math.floor(s / 3600) + " h " + Math.floor((s % 3600) / 60) + " min";
+  return Math.floor(s / 86400) + " d " + Math.floor((s % 86400) / 3600) + " h";
+}
+const RESULTS = { ok: ["ok", "OK"], provider_error: ["bad", "Provider error"], blocked: ["bad", "Blocked"], rate_limited: ["warn", "Rate limited"], model_denied: ["warn", "Model denied"], over_budget: ["warn", "Over budget"], too_large: ["warn", "Too large"], bad_request: ["", "Bad request"] };
+// quiet: in long tables an OK or a flag is plain text, so the exceptions are the only chips on screen
+const badge = (r, quiet) => { const [tone, label] = RESULTS[r] || ["", r]; return quiet && r === "ok" ? h("span", { class: "muted" }, label) : h("span", { class: "b " + tone }, label); };
+const statusBadge = (e, quiet) => (e.flagged && e.result === "ok" ? (quiet ? h("span", { class: "t-warn" }, "Flagged") : h("span", { class: "b warn" }, "Flagged")) : badge(e.result, quiet));
+const keyName = (id) => (id === "master" ? "Master key" : (S.keys.find((k) => k.id === id) || {}).name || id);
 
 async function api(path, opts) {
-  const r = await fetch(path, Object.assign({}, opts, { headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" } }));
+  const r = await fetch(path, Object.assign({}, opts, { headers: { Authorization: "Bearer " + S.key, "Content-Type": "application/json" } }));
   const body = await r.json().catch(() => ({}));
   if (r.status === 401) { signOut("That key was not accepted."); throw new Error("signed out"); }
   if (!r.ok) throw new Error((body.error && body.error.message) || r.statusText);
   return body;
 }
+const q = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v !== "" && v != null)).toString();
 
+/* ---------- sign in / out ---------- */
 function signOut(msg) {
-  key = "";
+  S.key = "";
   try { sessionStorage.removeItem("gwkey"); } catch (e) { /* ignore */ }
-  clearInterval(state.timer);
+  clearInterval(S.timer);
   showLogin(msg);
 }
-
 function showLogin(msg) {
-  const input = h("input", { type: "password", id: "k", autocomplete: "off", placeholder: "GATEWAY_KEY", "aria-label": "Master gateway key", required: true });
+  const input = h("input", { type: "password", id: "k", autocomplete: "off", required: true, "aria-describedby": "kh" });
   const form = h("form", { onsubmit: async (ev) => {
     ev.preventDefault();
-    key = input.value.trim();
-    try {
-      await api("/admin/api/summary?since=1h");
-      try { sessionStorage.setItem("gwkey", key); } catch (e) { /* ignore */ }
-      showApp();
-    } catch (e) { if (e.message !== "signed out") showLogin(e.message); }
+    S.key = input.value.trim();
+    try { await api("/admin/api/config"); try { sessionStorage.setItem("gwkey", S.key); } catch (e) { /* ignore */ } start(); }
+    catch (e) { if (e.message !== "signed out") showLogin(e.message); }
   } },
-    h("p", { class: "muted" }, "Sign in with the master GATEWAY_KEY. It stays in this tab only and is sent only to this server."),
-    msg ? h("div", { class: "error", role: "alert" }, msg) : "",
-    input, h("p", null, h("button", { class: "primary", type: "submit" }, "Sign in")));
-  app.replaceChildren(h("div", { class: "login" }, h("div", { class: "panel" }, h("h2", null, "Gateway admin"), form)));
+    h("div", { class: "field" }, h("label", { for: "k" }, "Master gateway key"), input,
+      h("span", { class: "hint", id: "kh" }, "The GATEWAY_KEY value. It stays in this tab and is sent only to this server.")),
+    msg ? h("div", { class: "err", role: "alert" }, msg) : null,
+    h("div", null, h("button", { class: "btn primary", type: "submit" }, "Sign in")));
+  app.replaceChildren(h("div", { class: "login" }, h("div", { class: "panel" }, h("div", { class: "body" }, h("h1", null, "Gateway admin"), form))));
   input.focus();
 }
 
-const TABS = [["overview", "Overview"], ["keys", "Keys"], ["events", "Requests"], ["settings", "Settings"]];
+/* ---------- shell ---------- */
+const PAGES = [["overview", "Overview"], ["requests", "Requests"], ["threats", "Threats"], ["keys", "Keys"], ["providers", "Providers"], ["settings", "Settings"]];
+let els = {};
 
-function showApp() {
-  const nav = h("nav", null, TABS.map(([id, label]) => h("button", { "aria-current": state.tab === id ? "page" : null, onclick: () => { state.tab = id; showApp(); } }, label)));
-  const since = h("select", { "aria-label": "Time range", onchange: (e) => { state.since = e.target.value; showApp(); } },
-    [["1h", "Last hour"], ["24h", "Last 24 hours"], ["7d", "Last 7 days"]].map(([v, l]) => h("option", { value: v, selected: v === state.since }, l)));
-  const view = h("main", { id: "view" }, h("p", { class: "muted" }, "Loading…"));
-  app.replaceChildren(
-    h("header", null, h("div", { class: "bar" }, h("span", { class: "brand" }, "Gateway"), nav, h("span", { class: "spacer" }), since,
-      h("button", { class: "small", onclick: () => signOut("") }, "Sign out"))),
-    view);
-  clearInterval(state.timer);
-  const draw = { overview, keys: keysView, events: eventsView, settings }[state.tab];
-  draw(view).catch((e) => { if (e.message !== "signed out") view.replaceChildren(h("div", { class: "error", role: "alert" }, e.message)); });
+function go(route, params) {
+  const qs = q(params || {});
+  location.hash = "#/" + route + (qs ? "?" + qs : "");
+}
+function parseHash() {
+  const [path, qs] = location.hash.replace(/^#\/?/, "").split("?");
+  S.route = PAGES.some(([id]) => id === path) ? path : "overview";
+  S.params = Object.fromEntries(new URLSearchParams(qs || ""));
 }
 
-const pct = (x) => (x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 1) + "%";
-const fmtTime = (t) => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const tone = (res) => ({ ok: "ok", provider_error: "bad", blocked: "bad", rate_limited: "warn", model_denied: "warn", too_large: "warn" }[res] || "");
-const badge = (res) => h("span", { class: "badge " + tone(res) }, res.replace("_", " "));
-const card = (n, l) => h("div", { class: "card" }, h("div", { class: "n" }, n), h("div", { class: "l" }, l));
-function table(head, rows, empty) {
-  if (!rows.length) return h("div", { class: "tablewrap" }, h("div", { class: "empty" }, empty));
-  return h("div", { class: "tablewrap" }, h("table", null,
-    h("thead", null, h("tr", null, head.map(([t, num]) => h("th", { class: num ? "num" : "", scope: "col" }, t)))),
-    h("tbody", null, rows.map((r) => h("tr", null, r.map((c, i) => h("td", { class: head[i][1] ? "num" : "" }, c)))))));
+async function start() {
+  try {
+    S.cfg = await api("/admin/api/config");
+    S.keys = (await api("/admin/api/keys")).data;
+  } catch (e) { if (e.message !== "signed out") showLogin(e.message); return; }
+  buildShell();
+  parseHash();
+  render();
 }
 
-async function overview(view) {
-  const [s, p] = await Promise.all([api("/admin/api/summary?since=" + state.since), api("/v1/providers?since=" + state.since)]);
-  const r = s.by_result;
-  const refused = (r.rate_limited || 0) + (r.model_denied || 0) + (r.too_large || 0);
-  view.replaceChildren(
-    h("div", { class: "cards" },
-      card(s.requests, "requests"), card(r.blocked || 0, "blocked by filter"), card(s.flagged, "flagged (allowed)"),
-      card(refused, "refused by limits"), card(pct(s.provider_error_rate), "provider errors"), card(s.avg_total_ms + " ms", "average time")),
-    h("h2", null, "Providers"),
-    table([["Provider"], ["Models", 1], ["Tries", 1], ["Error rate", 1], ["Avg first byte", 1], ["Model list"]],
-      p.data.map((x) => [x.name, x.models, x.stats ? x.stats.requests : 0, x.stats ? pct(x.stats.error_rate) : "–",
-        x.stats && x.stats.avg_ttfb_ms != null ? x.stats.avg_ttfb_ms + " ms" : "–",
-        x.refresh_ok === false ? h("span", { class: "badge bad", title: x.refresh_error || "" }, "refresh failed") : h("span", { class: "badge ok" }, "ok")]),
-      "No providers."),
-    h("h2", null, "By key"),
-    table([["Key"], ["Requests", 1], ["Blocked", 1], ["Rate limited / model denied", 1]],
-      s.by_key.map((k) => [k.name || k.key, k.requests, k.blocked, k.limited_or_denied]), "No requests in this period."),
-    s.dropped ? h("p", { class: "muted" }, s.dropped + " events were dropped because the write queue was full.") : "");
+function buildShell() {
+  els.nav = h("nav", { class: "nav", "aria-label": "Pages" }, PAGES.map(([id, label]) => h("a", { href: "#/" + id, "data-page": id }, ic(id), label)));
+  els.status = h("div", { class: "rail-foot" });
+  els.title = h("h1");
+  els.search = h("input", { type: "text", id: "gsearch", placeholder: "Search request id, model, key", autocomplete: "off", "aria-label": "Search requests" });
+  const searchForm = h("form", { class: "search", role: "search", onsubmit: (e) => { e.preventDefault(); go("requests", { q: els.search.value.trim() }); } },
+    ic("search"), els.search, h("kbd", { "aria-hidden": "true" }, "/"));
+  els.range = h("div", { class: "seg", role: "radiogroup", "aria-label": "Time range" }, [["1h", "1H"], ["24h", "24H"], ["7d", "7D"]].map(([v, l]) =>
+    h("button", { type: "button", role: "radio", "data-v": v, onclick: () => { S.since = v; store.set("gw.since", v); syncControls(); refreshNow(); } }, l)));
+  els.live = h("button", { type: "button", class: "btn live", "aria-pressed": "true", title: "Refresh every 5 seconds", onclick: () => { S.live = !S.live; store.set("gw.live", S.live ? "1" : "0"); syncControls(); } }, h("i"), "Live");
+  els.view = h("div", { class: "content", id: "view" });
+  els.drawer = h("aside", { class: "drawer", "aria-label": "Request details", tabindex: "-1" });
+  app.replaceChildren(h("div", { class: "shell" },
+    h("div", { class: "rail" }, h("div", { class: "brand" }, "Gateway", h("span", null, "admin")), els.nav, els.status),
+    h("div", { class: "main" }, h("div", { class: "top" }, els.title, searchForm, h("span", { class: "spacer" }), els.range, els.live,
+      h("button", { class: "btn", type: "button", onclick: () => signOut("") }, "Sign out")), els.view)), els.drawer);
+  syncControls();
+  paintStatus();
+}
+function syncControls() {
+  els.range.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === S.since)));
+  els.live.setAttribute("aria-pressed", String(S.live));
+  els.nav.querySelectorAll("a").forEach((a) => (a.dataset.page === S.route ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+}
+function paintStatus(dropped) {
+  const c = S.cfg || {};
+  const rows = [h("div", null, h("b", null, "Gateway online")), h("div", null, "Up " + (c.started ? uptime(c.started) : "unknown")),
+    h("div", null, c.database ? "Database on" : "Database off: no stats or keys")];
+  if (dropped) rows.push(h("div", { class: "faint" }, fmt(dropped) + " events dropped"));
+  els.status.replaceChildren(...rows);
 }
 
-async function keysView(view) {
-  const [list, s] = await Promise.all([api("/admin/api/keys"), api("/admin/api/summary?since=" + state.since)]);
-  const counts = {};
-  s.by_key.forEach((k) => { counts[k.key] = k.requests; });
-  const note = h("div", { id: "note" });
-  const name = h("input", { id: "kn", required: true, maxlength: 64, placeholder: "my app" });
-  const models = h("input", { id: "km", placeholder: "groq/*, ollama/qwen2.5:0.5b   (empty = all)", size: 38 });
-  const rpm = h("input", { id: "kr", type: "number", min: 0, value: 0, style: "width:110px" });
-  const form = h("form", { class: "row", onsubmit: async (ev) => {
+function render() {
+  closeDrawer();
+  clearInterval(S.timer);
+  syncControls();
+  const label = PAGES.find(([id]) => id === S.route)[1];
+  els.title.textContent = label;
+  document.title = label + " - Gateway admin";
+  els.search.value = S.route === "requests" ? S.params.q || "" : "";
+  els.view.replaceChildren();
+  S.page = { overview, requests, threats, keys: keysPage, providers, settings }[S.route](els.view);
+  S.timer = setInterval(() => { if (S.live && !document.hidden && S.page && S.page.live) S.page.refresh(); }, 5000);
+}
+function refreshNow() { if (S.page) S.page.refresh(); }
+window.addEventListener("hashchange", () => { parseHash(); if (S.key && els.view) render(); });
+document.addEventListener("keydown", (e) => {
+  if (!els.search) return;
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === "/" && !typing) { e.preventDefault(); els.search.focus(); }
+  if (e.key === "Escape") { if (els.drawer.classList.contains("open")) closeDrawer(); else if (document.activeElement === els.search) els.search.blur(); }
+});
+
+/* shared pieces */
+function failure(box, retry) {
+  return (e) => { if (e.message === "signed out") return; box.replaceChildren(h("div", { class: "err", role: "alert" }, h("span", null, e.message), h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: retry }, "Retry"))); };
+}
+function skeleton(rows = 4) { return h("div", { class: "body", "aria-hidden": "true" }, Array.from({ length: rows }, () => h("div", {}, h("span", { class: "sk" }), h("br")))); }
+function sampleCurl() {
+  const c = S.cfg, p = c.providers[0] ? c.providers[0].name : "provider";
+  return "curl http://" + c.listen + "/v1/chat/completions \\\n  -H \"Authorization: Bearer <a key>\" -H \"Content-Type: application/json\" \\\n  -d '{\"model\":\"" + p + "/<model>\",\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}'";
+}
+
+/* ---------- inspector ---------- */
+let lastFocus = null;
+function closeDrawer() {
+  if (!els.drawer) return;
+  els.drawer.classList.remove("open");
+  document.querySelectorAll(".sel").forEach((r) => r.classList.remove("sel"));
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  lastFocus = null;
+}
+function explain(e) {
+  const k = S.keys.find((x) => x.id === e.key);
+  switch (e.result) {
+    case "ok": return "Answered by " + (e.provider || "a provider") + " in " + ms(e.total_ms) + ".";
+    case "provider_error": return (e.provider || "The provider") + " failed or could not be reached (HTTP " + e.status + "). If a fallback was listed it was tried first.";
+    case "blocked": return "Stopped by the " + e.filter + " filter before it reached any provider. Nothing was sent on.";
+    case "rate_limited": return "This key went over its limit" + (k && k.rpm ? " of " + k.rpm + " requests per minute" : "") + ". Nothing was sent on.";
+    case "model_denied": return "This key is not allowed to use " + (e.model || "that model") + ". Nothing was sent on.";
+    case "over_budget": return "This key has used its monthly budget" + (k && k.budget_usd ? " of " + money(k.budget_usd) : "") + ", so nothing was sent on. It resets on the 1st (UTC).";
+    case "too_large": return "The request, or the new text in it, was over the size limit, so it was not scanned or sent.";
+    case "bad_request": return "The body was not valid JSON with a model, or it named a provider this gateway does not have.";
+    default: return "";
+  }
+}
+function openDrawer(e, row) {
+  lastFocus = document.activeElement;
+  document.querySelectorAll(".sel").forEach((r) => r.classList.remove("sel"));
+  if (row) row.classList.add("sel");
+  const total = Math.max(e.total_ms, e.ttfb_ms, 1), first = Math.min(e.ttfb_ms, total);
+  const lo = S.cfg.filter_log, hi = S.cfg.filter_block;
+  const copyBtn = h("button", { class: "btn small", type: "button", onclick: (ev) => { navigator.clipboard.writeText(e.request_id).then(() => { ev.currentTarget.replaceChildren(ic("check", 14), "Copied"); }); } }, ic("copy", 14), "Copy id");
+  const close = h("button", { class: "btn small", type: "button", "aria-label": "Close details", onclick: closeDrawer }, ic("close", 14));
+  const f1 = h("div", { class: "span" }); const i1 = h("i"); const i2 = h("i"); i1.style.width = (first / total) * 100 + "%"; i2.style.width = ((total - first) / total) * 100 + "%"; f1.append(i1, i2);
+  const sections = [
+    h("p", { class: "why" }, explain(e)),
+    h("section", null, h("h3", null, "Request"), h("dl", { class: "dr" },
+      h("dt", null, "Result"), h("dd", null, badge(e.result), e.flagged ? " " : null, e.flagged ? h("span", { class: "b warn" }, "Flagged") : null),
+      h("dt", null, "HTTP status"), h("dd", { class: "mono" }, e.status),
+      h("dt", null, "Time"), h("dd", null, absTime(e.ts), h("span", { class: "faint" }, "  " + rel(e.ts))),
+      h("dt", null, "Key"), h("dd", null, keyName(e.key), " ", h("span", { class: "mono faint" }, e.key)),
+      h("dt", null, "Model"), h("dd", { class: "mono" }, e.model || "none"),
+      h("dt", null, "Provider"), h("dd", null, e.provider || "none"),
+      e.in_tokens || e.out_tokens ? [h("dt", null, "Tokens"), h("dd", { class: "mono" }, fmt(e.in_tokens || 0) + " in, " + fmt(e.out_tokens || 0) + " out")] : null,
+      e.cost_usd ? [h("dt", null, "Cost"), h("dd", { class: "mono" }, money(e.cost_usd))] : null)),
+    e.result === "ok" || e.result === "provider_error" ? h("section", null, h("h3", null, "Timing"), f1,
+      h("dl", { class: "dr" }, h("dt", null, "First byte"), h("dd", { class: "mono" }, ms(e.ttfb_ms)),
+        h("dt", null, "Streaming"), h("dd", { class: "mono" }, ms(Math.max(0, e.total_ms - e.ttfb_ms))), h("dt", null, "Total"), h("dd", { class: "mono" }, ms(e.total_ms)))) : null,
+    e.filter ? filterSection(e, lo, hi) : null,
+    h("div", { class: "acts" },
+      h("button", { class: "btn small", type: "button", onclick: () => go("requests", { key: e.key }) }, "More from this key"),
+      e.model ? h("button", { class: "btn small", type: "button", onclick: () => go("requests", { q: e.model }) }, "Same model") : null),
+  ];
+  els.drawer.replaceChildren(h("header", null, h("h2", null, "Request"), h("span", { class: "mono faint trunc" }, e.request_id), h("span", { class: "spacer" }), copyBtn, close), h("div", { class: "scroll" }, sections));
+  els.drawer.classList.add("open");
+  close.focus();
+}
+function scaleLabels(lo, hi) {
+  const mk = (txt, at) => { const s = h("span", null, txt); s.style.left = at * 100 + "%"; return s; };
+  return h("div", { class: "scale-l" }, mk("0", 0), mk("flag " + lo.toFixed(2), lo), mk("block " + hi.toFixed(2), hi), mk("1", 1));
+}
+function filterSection(e, lo, hi) {
+  const sc = h("div", { class: "scale" }); sc.style.setProperty("--a", lo * 100 + "%"); sc.style.setProperty("--b", hi * 100 + "%");
+  const mark = h("i"); mark.style.left = "calc(" + Math.min(1, e.score) * 100 + "% - 1px)"; sc.append(mark);
+  return h("section", null, h("h3", null, "Filter score"), sc,
+    scaleLabels(lo, hi),
+    h("dl", { class: "dr" }, h("dt", null, "Filter"), h("dd", null, e.filter), h("dt", null, "Rule"), h("dd", { class: "mono" }, e.rule || "none"), h("dt", null, "Score"), h("dd", { class: "mono" }, e.score.toFixed(2))));
+}
+function rowFor(e, cells) {
+  const tr = h("tr", { class: "row", tabindex: "0", "aria-label": "Open request " + e.request_id }, cells.map((c) => h("td", c.attrs, c.v)));
+  const open = () => openDrawer(e, tr);
+  tr.addEventListener("click", open);
+  tr.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); } });
+  return tr;
+}
+const filterCell = (e, chip) => (e.filter ? (chip || e.result === "blocked" ? h("span", { class: "b " + (e.result === "blocked" ? "bad" : "warn") }, e.filter + " " + e.score.toFixed(2)) : h("span", { class: "t-warn mono" }, e.filter + " " + e.score.toFixed(2))) : h("span", { class: "faint" }, "none"));
+
+/* ---------- traffic chart ---------- */
+function niceMax(v) { if (v <= 4) return 4; const raw = v / 4, p = Math.pow(10, Math.floor(Math.log10(raw))); for (const m of [1, 2, 5, 10]) if (raw <= m * p) return m * p * 4; return 40 * p; }
+function axisTicks(start, end) {
+  const span = end - start, out = [], d = new Date(start * 1000);
+  let hit, next, label;
+  if (span <= 7200) { d.setSeconds(0, 0); hit = () => d.getMinutes() % 15 === 0; next = () => d.setMinutes(d.getMinutes() + 1); label = () => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  else if (span <= 2 * 86400) { d.setMinutes(0, 0, 0); hit = () => d.getHours() % 6 === 0; next = () => d.setHours(d.getHours() + 1); label = () => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  else { d.setHours(0, 0, 0, 0); hit = () => true; next = () => d.setDate(d.getDate() + 1); label = () => d.toLocaleDateString([], { weekday: "short", day: "numeric" }); }
+  for (let guard = 0; d.getTime() / 1000 <= end && guard < 400; guard++) { const tt = d.getTime() / 1000; if (tt >= start && hit()) out.push([tt, label()]); next(); }
+  return out;
+}
+function drawChart(box, ser, compact) {
+  const bs = ser.buckets, n = bs.length;
+  const W = Math.max(320, box.clientWidth - 16), H = compact ? 190 : W < 560 ? 200 : 260, L = 40, R = 36, T = 10, B = 24, pw = W - L - R, ph = H - T - B;
+  const maxT = niceMax(Math.max(...bs.map((b) => b.total), 1)), maxB = niceMax(Math.max(...bs.map((b) => b.blocked), 1));
+  const x = (i) => L + (pw * (i + 0.5)) / n, y = (v) => T + ph - (v / maxT) * ph;
+  const svg = sv("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Requests over time. " + fmt(bs.reduce((a, b) => a + b.total, 0)) + " requests, " + fmt(bs.reduce((a, b) => a + b.blocked, 0)) + " blocked." });
+  for (let g = 0; g <= 4; g++) {
+    const yy = T + (ph * g) / 4;
+    svg.append(sv("line", { x1: L, x2: W - R, y1: yy, y2: yy, stroke: "var(--line)", "stroke-width": 1 }),
+      sv("text", { x: L - 8, y: yy + 3.5, "text-anchor": "end" }, fmt(Math.round(maxT * (1 - g / 4)))),
+      sv("text", { x: W - R + 8, y: yy + 3.5 }, fmt(Math.round(maxB * (1 - g / 4)))));
+  }
+  const day = ser.step * n > 86400 * 1.5, t0 = bs[0].t, span = ser.step * n;
+  axisTicks(t0, t0 + span).forEach(([tt, label]) => {
+    const xx = L + (pw * (tt - t0)) / span;
+    svg.append(sv("line", { x1: xx, x2: xx, y1: T + ph, y2: T + ph + 4, stroke: "var(--line2)" }), sv("text", { x: xx, y: H - 6, "text-anchor": "middle" }, label));
+  });
+  bs.forEach((b, i) => { if (b.errors > 0) svg.append(sv("rect", { x: L + (pw * i) / n, y: T, width: Math.max(2, pw / n), height: ph, fill: "var(--warn)", "fill-opacity": ".16" })); });
+  let area = "M" + x(0) + " " + y(0);
+  bs.forEach((b, i) => { area += "L" + x(i) + " " + y(b.total); });
+  area += "L" + x(n - 1) + " " + y(0) + "Z";
+  svg.append(sv("path", { d: area, fill: "var(--cyan)", "fill-opacity": ".13" }),
+    sv("polyline", { points: bs.slice(0, n - 1).map((b, i) => x(i) + "," + y(b.total)).join(" "), fill: "none", stroke: "var(--cyan)", "stroke-width": 1.6, "stroke-linejoin": "round" }),
+    n > 1 ? sv("line", { x1: x(n - 2), y1: y(bs[n - 2].total), x2: x(n - 1), y2: y(bs[n - 1].total), stroke: "var(--cyan)", "stroke-width": 1.6, "stroke-dasharray": "3 3" }) : null);
+  bs.forEach((b, i) => {
+    if (!b.blocked) return;
+    const top = T + ph - (b.blocked / maxB) * ph * 0.62;
+    svg.append(sv("line", { x1: x(i), x2: x(i), y1: T + ph, y2: top, stroke: "var(--rose)", "stroke-width": 1.6 }), sv("circle", { cx: x(i), cy: top, r: 3, fill: "var(--rose)" }));
+  });
+  const cross = sv("line", { y1: T, y2: T + ph, stroke: "var(--line2)", "stroke-width": 1, visibility: "hidden" });
+  svg.append(cross);
+  const tip = h("div", { class: "tip", hidden: true });
+  const hit = sv("rect", { x: L, y: T, width: pw, height: ph, fill: "transparent" });
+  hit.addEventListener("pointermove", (ev) => {
+    const r = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor(((ev.clientX - r.left - L) / pw) * n))), b = bs[i];
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    const end = new Date((b.t + ser.step) * 1000), st = new Date(b.t * 1000);
+    const tf = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    tip.replaceChildren(h("b", null, (day ? st.toLocaleDateString([], { month: "short", day: "numeric" }) + " " : "") + tf(st) + " to " + tf(end) + (i === n - 1 ? " (so far)" : "")),
+      ...[["Requests", b.total], ["Answered", b.ok], ["Blocked", b.blocked], ["Flagged", b.flagged], ["Refused", b.limited], ["Provider errors", b.errors]].map(([l, v]) => h("div", null, h("span", null, l), h("span", null, fmt(v)))));
+    tip.hidden = false;
+    const left = x(i) + 8 + 16, flip = left + 190 > box.clientWidth;
+    tip.style.left = (flip ? x(i) - 190 : left) + "px"; tip.style.top = "14px";
+  });
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  svg.append(hit);
+  const none = bs.every((b) => b.total === 0) ? h("div", { class: "none" }, h("strong", null, "No requests in this period"), h("span", null, "Traffic shows here as soon as a request goes through.")) : null;
+  box.style.minHeight = H + 8 + "px";
+  box.replaceChildren(...[svg, tip, none].filter(Boolean));
+}
+
+/* ---------- pages ---------- */
+function delta(cur, prev, badUp) {
+  if (prev === 0 && cur === 0) return h("div", { class: "d" }, "none in either period");
+  if (prev < 50) return h("div", { class: "d" }, fmt(prev) + " in the period before"); // too few to compare as a percentage
+  const ch = (cur - prev) / prev;
+  if (Math.abs(ch) < 0.005) return h("div", { class: "d" }, "same as the period before");
+  const up = ch > 0;
+  return h("div", { class: "d " + (badUp && up ? "up-bad" : "") }, (up ? "up " : "down ") + Math.abs(Math.round(ch * 100)) + "% on the period before");
+}
+function metric(href, label, value, sub, alert) {
+  return h("a", { class: "m" + (alert ? " alert" : ""), href }, h("div", { class: "l" }, label), h("div", { class: "v" }, value), sub);
+}
+
+function alertRow(e) {
+  const row = h("div", { class: "arow", tabindex: "0", role: "button", "aria-label": "Open request " + e.request_id },
+    h("div", { class: "a1" }, statusBadge(e), h("span", { class: "mono trunc" }, e.model || "no model"), h("span", { class: "grow" }), h("span", { class: "faint", title: absTime(e.ts) }, rel(e.ts))),
+    h("div", { class: "a2" }, h("span", null, keyName(e.key)), e.filter ? filterCell(e, true) : null));
+  row.addEventListener("click", () => openDrawer(e, row));
+  row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openDrawer(e, row); } });
+  return row;
+}
+
+function ruleRows(rules, limit) {
+  const list = rules.slice(0, limit), top = Math.max(1, ...list.map((r) => r.count));
+  return h("div", { class: "rules" }, list.map((r) => {
+    const a = h("i"), b = h("i"), bar = h("span", { class: "bar split" }, a, b);
+    a.style.width = (r.blocked / top) * 100 + "%"; b.style.width = ((r.count - r.blocked) / top) * 100 + "%";
+    return h("div", { class: "rule" }, h("span", { class: "mono" }, r.rule || "unnamed"), bar, h("span", { class: "muted" }, fmt(r.blocked) + " blocked, " + fmt(r.count - r.blocked) + " flagged"));
+  }));
+}
+
+function statusSentence(s, provs) {
+  const span = { "1h": "hour", "24h": "24 hours", "7d": "7 days" }[S.since];
+  if (!s.requests) return [h("span", { class: "b" }, "No traffic"), h("span", { class: "muted" }, "No requests in the last " + span + ".")];
+  const failed = provs.filter((p) => p.refresh_ok === false), rate = s.provider_error_rate;
+  const tone = rate >= 0.05 ? "bad" : s.provider_errors > 0 || failed.length ? "warn" : "ok";
+  const bits = [];
+  bits.push(s.provider_errors ? [h("b", null, fmt(s.provider_errors)), " of ", fmt(s.requests), " requests got a provider error (", pct(rate), ")."] : ["No provider errors in ", fmt(s.requests), " requests."]);
+  if (failed.length) bits.push([h("b", null, failed.length + " of " + provs.length), " providers failed their last model list refresh."]);
+  bits.push([h("b", null, fmt(s.blocked)), " blocked and ", h("b", null, fmt(s.flagged)), " flagged by the filter."]);
+  const words = ["Last " + span + ": "]; bits.forEach((b) => words.push(...b, " "));
+  return [h("span", { class: "b " + tone }, tone === "ok" ? "All clear" : tone === "warn" ? "Worth a look" : "Provider errors"), h("span", null, words)];
+}
+
+function overview(view) {
+  const strip = h("div", { class: "strip" }, Array.from({ length: 6 }, () => h("div", { class: "m" }, h("span", { class: "sk" }))));
+  const chartBox = h("div", { class: "chart" });
+  const att = h("div"), prov = h("div"), rul = h("div");
+  const first = h("div"), say = h("div", { class: "statusline", "aria-live": "polite" });
+  view.replaceChildren(first, say, strip,
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Traffic"), h("span", { class: "spacer" }),
+      h("div", { class: "legend" }, h("span", null, h("i", { class: "lg-c" }), "Requests (left axis)"), h("span", null, h("i", { class: "lg-r" }), "Blocked (right axis)"), h("span", null, h("i", { class: "lg-w" }), "Provider errors (shaded)"))), chartBox),
+    h("div", { class: "cols" },
+      h("section", { class: "panel" }, h("header", null, h("h2", null, "Needs attention"), h("span", { class: "spacer" }), h("a", { class: "link", href: "#/requests?attention=1" }, "All of these")), att),
+      h("div", { class: "stack" },
+        h("section", { class: "panel" }, h("header", null, h("h2", null, "Providers"), h("span", { class: "spacer" }), h("a", { class: "link", href: "#/providers" }, "Models and providers")), prov),
+        h("section", { class: "panel" }, h("header", null, h("h2", null, "Caught by filter"), h("span", { class: "spacer" }), h("a", { class: "link", href: "#/threats" }, "All threats")), rul))));
+  chartBox.style.minHeight = "268px";
+  let ser = null;
+  async function refresh() {
+    try {
+      const [s, sr, ev, pv] = await Promise.all([api("/admin/api/summary?since=" + S.since), api("/admin/api/series?" + q({ since: S.since, buckets: 60 })),
+        api("/admin/api/events?" + q({ since: S.since, attention: 1, limit: 8 })), api("/v1/providers?since=" + S.since)]);
+      first.replaceChildren();
+      paintStatus(s.dropped);
+      const pv0 = s.previous;
+      strip.replaceChildren(...[
+        metric("#/requests", "Requests", fmt(s.requests), delta(s.requests, pv0.requests, false)),
+        metric("#/requests?result=blocked", "Blocked by filter", fmt(s.blocked), delta(s.blocked, pv0.blocked, true), s.blocked > 0),
+        metric("#/threats", "Flagged and allowed", fmt(s.flagged), delta(s.flagged, pv0.flagged, true)),
+        metric("#/requests?result=rate_limited,model_denied,over_budget,too_large", "Refused by limits", fmt(s.refused), delta(s.refused, pv0.refused, true)),
+        metric("#/requests?result=provider_error", "Provider errors", s.requests ? pct(s.provider_error_rate) : "none", h("div", { class: "d" }, fmt(s.provider_errors) + " of " + fmt(s.requests) + " requests")),
+        metric("#/providers", "First byte p50 / p95", s.answered ? [fmt(s.first_byte_p50_ms), h("small", null, " / " + fmt(s.first_byte_p95_ms) + " ms")] : "none", h("div", { class: "d" }, fmt(s.answered) + " answered")),
+        s.priced ? metric("#/keys", "Spend", money(s.cost_usd), h("div", { class: "d" }, fmt(s.in_tokens + s.out_tokens) + " tokens, " + (pv0.cost_usd ? "was " + money(pv0.cost_usd) : "none before"))) : null].filter(Boolean));
+      strip.classList.toggle("seven", !!s.priced);
+      say.replaceChildren(...statusSentence(s, pv.data));
+      ser = sr; drawChart(chartBox, ser);
+      if (!ev.data.length) att.replaceChildren(h("div", { class: "empty" }, h("strong", null, s.requests ? "Nothing needs attention" : "No requests yet"),
+        s.requests ? "No blocks, flags, refusals or provider errors in this period." : "Send a request through the gateway and it will show up here.",
+        s.requests ? null : h("pre", null, sampleCurl())));
+      else att.replaceChildren(h("div", { class: "alist" }, ev.data.map(alertRow)));
+      rul.replaceChildren(s.by_rule.length ? ruleRows(s.by_rule, 4) : h("div", { class: "empty" }, h("strong", null, "The filter has matched nothing"), "No request in this period looked like an injection."));
+      prov.replaceChildren(pv.data.length ? h("div", { class: "tw" }, h("table", { class: "ptbl" },
+        h("thead", null, h("tr", null, h("th", null, "Provider"), h("th", { class: "num" }, "Tries"), h("th", null, "Error rate"), h("th", { class: "num fb" }, "First byte"))),
+        h("tbody", null, pv.data.map((p) => {
+          const er = p.stats ? p.stats.error_rate : 0, tone = !p.stats ? "" : er >= 0.05 ? "bad" : er > 0 ? "warn" : "ok", fill = h("i"), bar = h("span", { class: "bar " + tone }, fill);
+          fill.style.width = Math.max(p.stats ? 6 : 0, er * 100) + "%";
+          return h("tr", null, h("td", null, h("a", { class: "link", href: "#/providers?provider=" + encodeURIComponent(p.name) }, p.name), p.refresh_ok === false ? h("span", { class: "b bad", title: p.refresh_error || "" }, "list failed") : null),
+            h("td", { class: "num" }, p.stats ? fmt(p.stats.requests) : "0"), h("td", null, p.stats ? [bar, " ", h("span", { class: "mono" }, pct(er))] : h("span", { class: "faint" }, "no tries")),
+            h("td", { class: "num mono fb" }, p.stats && p.stats.avg_ttfb_ms != null ? fmt(p.stats.avg_ttfb_ms) + " ms" : "none"));
+        })))) : h("div", { class: "empty" }, "No providers configured."));
+    } catch (e) { failure(first, refresh)(e); }
+  }
+  new ResizeObserver(() => { if (ser && chartBox.isConnected) drawChart(chartBox, ser); }).observe(chartBox);
+  refresh();
+  return { refresh, live: true };
+}
+
+function requests(view) {
+  const P = S.params, f = { result: P.result || "", key: P.key || "", q: P.q || "", attention: P.attention || "" };
+  const limit = { n: 100 };
+  const tbody = h("tbody"), box = h("div", { class: "tw" }), more = h("div", { class: "body", hidden: true }), note = h("span", { class: "muted" });
+  const err = h("div");
+  const setF = (patch) => go("requests", Object.assign({}, f, patch));
+  const results = [["", "All"], ["ok", "OK"], ["blocked", "Blocked"], ["provider_error", "Provider errors"], ["rate_limited,model_denied,over_budget,too_large", "Refused"], ["bad_request", "Bad request"]];
+  const seg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Result" }, results.map(([v, l]) => h("button", { type: "button", role: "radio", "aria-checked": String(f.result === v && !f.attention), onclick: () => setF({ result: v, attention: "" }) }, l)));
+  const keySel = h("select", { "aria-label": "Key", onchange: (e) => setF({ key: e.target.value }) }, h("option", { value: "" }, "All keys"), h("option", { value: "master" }, "Master key"), S.keys.map((k) => h("option", { value: k.id }, k.name)));
+  keySel.value = f.key;
+  const active = h("div", { class: "active-filters" });
+  const chips = [];
+  if (f.q) chips.push(["Search: " + f.q, { q: "" }]);
+  if (f.key) chips.push(["Key: " + keyName(f.key), { key: "" }]);
+  if (f.attention) chips.push(["Needs attention", { attention: "" }]);
+  chips.forEach(([t, patch]) => active.append(h("span", { class: "chip" }, t, h("button", { type: "button", "aria-label": "Remove filter " + t, onclick: () => setF(patch) }, ic("close", 12)))));
+  const headRow = h("tr", null, [["Time", ""], ["Result", ""], ["Key", ""], ["Model", "hm"], ["Provider", "hm"], ["Status", "hm num"], ["Filter", "hm"], ["First byte / total", "hm"], ["Request", "hm"]].map(([t, c]) => h("th", { class: c }, t)));
+  box.replaceChildren(h("table", null, h("thead", null, headRow), tbody));
+  view.replaceChildren(h("div", { class: "bar2" }, seg, keySel, active, h("span", { class: "spacer" }), note), err,
+    h("section", { class: "panel" }, box, more));
+  tbody.append(...Array.from({ length: 6 }, () => h("tr", null, h("td", { colspan: 9 }, h("span", { class: "sk" })))));
+  async function refresh() {
+    try {
+      const out = await api("/admin/api/events?" + q({ since: S.since, result: f.result, key: f.key, q: f.q, attention: f.attention, limit: limit.n }));
+      err.replaceChildren();
+      const maxTotal = Math.max(1, ...out.data.map((e) => e.total_ms));
+      note.textContent = fmt(out.data.length) + (out.data.length === limit.n ? "+" : "") + " requests, newest first";
+      if (!out.data.length) { tbody.replaceChildren(h("tr", null, h("td", { colspan: 9, class: "empty" }, h("strong", null, "No requests match"),
+        f.result || f.key || f.q || f.attention ? "Try removing a filter, or widen the time range." : "Nothing has gone through the gateway in this period.", f.result || f.key || f.q || f.attention ? null : h("pre", null, sampleCurl())))); more.hidden = true; return; }
+      tbody.replaceChildren(...out.data.map((e) => {
+        const a = h("i"), b = h("i"); a.style.width = (Math.min(e.ttfb_ms, e.total_ms) / maxTotal) * 100 + "%"; b.style.width = (Math.max(0, e.total_ms - e.ttfb_ms) / maxTotal) * 100 + "%";
+        return rowFor(e, [{ attrs: { title: absTime(e.ts), class: "faint" }, v: rel(e.ts) }, { v: badge(e.result, true) }, { attrs: { class: "keycell" }, v: h("div", null, keyName(e.key), h("span", { class: "mono msub" }, e.model || "none")) }, { attrs: { class: "mono trunc hm" }, v: e.model || "none" }, { attrs: { class: "hm" }, v: e.provider || h("span", { class: "faint" }, "none") },
+          { attrs: { class: "num mono hm" }, v: e.status }, { attrs: { class: "hm" }, v: filterCell(e) },
+          { attrs: { class: "hm" }, v: [h("span", { class: "bar split" }, a, b), " ", h("span", { class: "mono" }, e.ttfb_ms + " / " + e.total_ms + " ms")] }, { attrs: { class: "mono faint hm" }, v: e.request_id }]);
+      }));
+      more.hidden = out.data.length < limit.n || limit.n >= 500;
+      more.replaceChildren(h("button", { class: "btn", type: "button", onclick: () => { limit.n = Math.min(500, limit.n + 100); refresh(); } }, "Show more"));
+    } catch (e) { failure(err, refresh)(e); }
+  }
+  refresh();
+  return { refresh, live: true };
+}
+
+function threats(view) {
+  const lo = S.cfg.filter_log, hi = S.cfg.filter_block;
+  const rulesBox = h("div"), tbl = h("div"), first = h("div"), headline = h("div", { class: "bar2" }), chartBox = h("div", { class: "chart" }), more = h("div", { class: "body", hidden: true }), count = h("span", { class: "muted" });
+  const limit = { n: 100 };
+  let ser = null;
+  const sc = h("div", { class: "scale" }); sc.style.setProperty("--a", lo * 100 + "%"); sc.style.setProperty("--b", hi * 100 + "%");
+  view.replaceChildren(first, headline,
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "When it happened"), h("span", { class: "spacer" }), h("div", { class: "legend" }, h("span", null, h("i", { class: "lg-r" }), "Blocked per interval (right axis)"), h("span", null, h("i", { class: "lg-c" }), "All requests (left axis)"), h("span", null, h("i", { class: "lg-w" }), "Provider errors (shaded)"))), chartBox),
+    h("div", { class: "cols" },
+      h("section", { class: "panel" }, h("header", null, h("h2", null, "Caught by rule")), rulesBox),
+      h("section", { class: "panel" }, h("header", null, h("h2", null, "Filter strictness")), h("div", { class: "body" }, sc,
+        scaleLabels(lo, hi),
+        h("p", { class: "muted" }, "A score from " + lo.toFixed(2) + " is flagged and passed on with a header. From " + hi.toFixed(2) + " the request is blocked before any provider sees it. Filters: " + (S.cfg.filters.join(", ") || "none") + "."),
+        h("p", { class: "faint" }, "Set FILTER_LOG and FILTER_BLOCK in .env and restart to change this. Editing it here is on the roadmap.")))),
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Blocked and flagged requests"), h("span", { class: "spacer" }), count), tbl, more));
+  chartBox.style.minHeight = "198px";
+  new ResizeObserver(() => { if (ser && chartBox.isConnected) drawChart(chartBox, ser, true); }).observe(chartBox);
+  async function refresh() {
+    try {
+      const [s, ev, sr] = await Promise.all([api("/admin/api/summary?since=" + S.since), api("/admin/api/events?" + q({ since: S.since, threat: 1, limit: limit.n })), api("/admin/api/series?" + q({ since: S.since, buckets: 60 }))]);
+      ser = sr; drawChart(chartBox, ser, true);
+      count.textContent = fmt(ev.data.length) + (ev.data.length === limit.n ? "+" : "") + " of " + fmt(s.blocked + s.flagged) + ", newest first";
+      more.hidden = ev.data.length < limit.n || limit.n >= 500;
+      more.replaceChildren(h("button", { class: "btn", type: "button", onclick: () => { limit.n = Math.min(500, limit.n + 100); refresh(); } }, "Show more"));
+      first.replaceChildren();
+      paintStatus(s.dropped);
+      headline.replaceChildren(h("span", null, h("b", null, fmt(s.blocked)), " blocked"), h("span", { class: "muted" }, " and "), h("span", null, h("b", null, fmt(s.flagged)), " flagged"),
+        h("span", { class: "muted" }, " out of " + fmt(s.requests) + " requests."));
+      rulesBox.replaceChildren(s.by_rule.length ? ruleRows(s.by_rule, 20) : h("div", { class: "empty" }, h("strong", null, "The filter has matched nothing"), "No request in this period looked like an injection."));
+      tbl.replaceChildren(ev.data.length ? h("div", { class: "tw" }, h("table", null,
+        h("thead", null, h("tr", null, ["Time", "Result", "Key", "Model", "Rule", "Score"].map((t, i) => h("th", { class: (i === 5 ? "num " : "") + (i === 3 ? "hm" : "") }, t)))),
+        h("tbody", null, ev.data.map((e) => rowFor(e, [{ attrs: { class: "faint", title: absTime(e.ts) }, v: rel(e.ts) }, { v: statusBadge(e, true) }, { attrs: { class: "keycell" }, v: h("div", null, keyName(e.key), h("span", { class: "mono msub" }, e.model)) }, { attrs: { class: "mono trunc hm" }, v: e.model },
+          { attrs: { class: "mono" }, v: e.rule }, { attrs: { class: "num mono" }, v: e.score.toFixed(2) }]))))) : h("div", { class: "empty" }, "No blocked or flagged requests in this period."));
+    } catch (e) { failure(first, refresh)(e); }
+  }
+  refresh();
+  return { refresh, live: true };
+}
+
+function keysPage(view) {
+  const note = h("div", { "aria-live": "polite" }), holder = h("div"), first = h("div");
+  const name = h("input", { type: "text", id: "kn", required: true, maxlength: 64, autocomplete: "off", placeholder: "billing app" });
+  const models = h("input", { type: "text", id: "km", autocomplete: "off", placeholder: "groq/*, ollama/qwen2.5:0.5b" });
+  const rpm = h("input", { type: "number", id: "kr", min: 0, max: 1000000, value: 0 });
+  const bud = h("input", { type: "number", id: "kb", min: 0, step: "any", value: 0 });
+  const add = (t) => { const cur = models.value.split(",").map((x) => x.trim()).filter(Boolean); if (!cur.includes(t)) cur.push(t); models.value = cur.join(", "); models.focus(); };
+  const quick = h("div", { class: "chips" }, S.cfg.providers.map((p) => h("button", { type: "button", class: "chip", onclick: () => add(p.name + "/*") }, p.name + "/*")));
+  const form = h("form", { onsubmit: async (ev) => {
     ev.preventDefault();
     try {
-      const out = await api("/admin/api/keys", { method: "POST", body: JSON.stringify({ name: name.value, models: models.value.split(","), rpm: Number(rpm.value) || 0 }) });
-      note.replaceChildren(h("div", { class: "callout", role: "status" },
-        h("strong", null, "Copy this key now. It is not stored and cannot be shown again."), h("p", null, h("code", null, out.key)),
-        h("button", { class: "small", type: "button", onclick: (e) => { navigator.clipboard.writeText(out.key).then(() => { e.target.textContent = "Copied"; }); } }, "Copy")));
-      name.value = ""; models.value = "";
-      refreshTable();
-    } catch (e) { if (e.message !== "signed out") note.replaceChildren(h("div", { class: "error", role: "alert" }, e.message)); }
+      const out = await api("/admin/api/keys", { method: "POST", body: JSON.stringify({ name: name.value, models: models.value.split(","), rpm: Number(rpm.value) || 0, budget_usd: Number(bud.value) || 0 }) });
+      note.replaceChildren(h("div", { class: "callout", role: "status" }, h("strong", null, "Copy this key now. It is not stored and cannot be shown again."), h("code", null, out.key),
+        h("div", null, h("button", { class: "btn small", type: "button", onclick: (e) => { navigator.clipboard.writeText(out.key).then(() => { e.currentTarget.replaceChildren(ic("check", 14), "Copied"); }); } }, ic("copy", 14), "Copy key"))));
+      name.value = ""; models.value = ""; rpm.value = 0; bud.value = 0;
+      S.keys = (await api("/admin/api/keys")).data; refresh();
+    } catch (e) { if (e.message !== "signed out") note.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); }
   } },
-    h("label", null, "Name", name), h("label", null, "Allowed models", models), h("label", null, "Requests per minute (0 = no limit)", rpm),
-    h("button", { class: "primary", type: "submit" }, "Create key"));
-  const holder = h("div");
-  function refreshTable() {
-    api("/admin/api/keys").then((l) => {
-      holder.replaceChildren(table([["Name"], ["Key"], ["Allowed models"], ["Per minute", 1], ["Requests", 1], ["Created"], ["Status"], [""]],
-        l.data.map((k) => [k.name, h("span", { class: "mono" }, k.prefix + "…  " + k.id), k.models.length ? k.models.join(", ") : "all", k.rpm || "no limit", counts[k.id] || 0,
-          fmtTime(k.created * 1000), k.revoked ? h("span", { class: "badge bad" }, "revoked") : h("span", { class: "badge ok" }, "active"),
-          k.revoked ? "" : h("button", { class: "small danger", onclick: async () => {
-            if (!confirm("Revoke " + k.name + "? It stops working immediately.")) return;
-            try { await api("/admin/api/keys/" + encodeURIComponent(k.id) + "/revoke", { method: "POST", body: "{}" }); refreshTable(); }
-            catch (e) { if (e.message !== "signed out") note.replaceChildren(h("div", { class: "error", role: "alert" }, e.message)); }
-          } }, "Revoke")]),
-        "No virtual keys yet. Create one above, then give each app its own."));
-    });
+    h("div", { class: "formrow" },
+      h("div", { class: "field" }, h("label", { for: "kn" }, "Name"), name),
+      h("div", { class: "field" }, h("label", { for: "km" }, "Allowed models"), models, h("span", { class: "hint" }, "Comma separated. Empty means every model."), quick.children.length ? quick : null),
+      h("div", { class: "field" }, h("label", { for: "kr" }, "Requests per minute"), rpm, h("span", { class: "hint" }, "0 means no limit.")),
+      h("div", { class: "field" }, h("label", { for: "kb" }, "Budget (US$ a month)"), bud, h("span", { class: "hint" }, "0 means none. Needs prices.")),
+      h("div", { class: "field" }, h("span", { class: "lab", "aria-hidden": "true" }, "\u00a0"), h("button", { class: "btn primary", type: "submit" }, "Create key"))));
+  view.replaceChildren(first, h("section", { class: "panel" }, h("header", null, h("h2", null, "New key")), h("div", { class: "body" }, form)), note,
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Virtual keys"), h("span", { class: "spacer" }), h("span", { class: "muted" }, "Use counts are for the selected time range")), holder));
+  async function refresh() {
+    try {
+      const [l, s] = await Promise.all([api("/admin/api/keys"), api("/admin/api/summary?since=" + S.since)]);
+      S.keys = l.data; first.replaceChildren(); paintStatus(s.dropped);
+      const use = Object.fromEntries(s.by_key.map((k) => [k.key, k]));
+      holder.replaceChildren(l.data.length ? h("div", { class: "tw" }, h("table", null,
+        h("thead", null, h("tr", null, ["Name", "Key", "Allowed models", "Limit", "Spend this month", "Requests", "Blocked", "Refused", "Last used", "Status", ""].map((t, i) => h("th", { class: i >= 3 && i <= 7 ? "num" : "" }, t)))),
+        h("tbody", null, l.data.map((k) => {
+          const u = use[k.id] || { requests: 0, blocked: 0, limited_or_denied: 0, last_seen: 0 };
+          const arm = h("button", { class: "btn small danger", type: "button" }, "Revoke");
+          let armed = false, t = null;
+          arm.addEventListener("click", async () => {
+            if (!armed) { armed = true; arm.textContent = "Confirm revoke"; arm.classList.add("armed"); t = setTimeout(() => { armed = false; arm.textContent = "Revoke"; arm.classList.remove("armed"); }, 4000); return; }
+            clearTimeout(t);
+            try { await api("/admin/api/keys/" + encodeURIComponent(k.id) + "/revoke", { method: "POST", body: "{}" }); note.replaceChildren(h("div", { class: "muted", role: "status" }, k.name + " was revoked and stops working now.")); refresh(); }
+            catch (e) { if (e.message !== "signed out") note.replaceChildren(h("div", { class: "err", role: "alert" }, e.message)); }
+          });
+          return h("tr", null, h("td", { class: "keycell" }, k.name), h("td", null, h("div", { class: "pair" }, h("span", { class: "mono" }, k.prefix + "..."), h("span", { class: "mono faint" }, k.id))),
+            h("td", null, k.models.length ? k.models.slice(0, 3).map((m) => h("span", { class: "chip" }, m)).concat(k.models.length > 3 ? [h("span", { class: "faint" }, " +" + (k.models.length - 3))] : []) : h("span", { class: "faint" }, "all models")),
+            h("td", { class: "num" }, k.rpm ? k.rpm + "/min" : "none"),
+            h("td", { class: "num" }, k.budget_usd ? [money(k.spent_usd), h("span", { class: "faint" }, " of " + money(k.budget_usd)), k.spent_usd >= k.budget_usd ? [" ", h("span", { class: "b warn" }, "Used up")] : null] : k.spent_usd ? money(k.spent_usd) : h("span", { class: "faint" }, "no budget")),
+            h("td", { class: "num" }, fmt(u.requests)), h("td", { class: "num" }, fmt(u.blocked)), h("td", { class: "num" }, fmt(u.limited_or_denied)),
+            h("td", { class: "faint", title: u.last_seen ? absTime(u.last_seen * 1000) : "" }, u.last_seen ? rel(u.last_seen * 1000) : "not in this range"),
+            h("td", null, k.revoked ? h("span", { class: "b bad" }, "Revoked") : h("span", { class: "b ok" }, "Active")), h("td", null, k.revoked ? null : arm));
+        })))) : h("div", { class: "empty" }, h("strong", null, "No virtual keys yet"), "Create one above and give each app its own, so you can limit it and see what it did. The master key is not listed here."));
+    } catch (e) { failure(first, refresh)(e); }
   }
-  view.replaceChildren(h("h2", null, "Create a key"), form, note, h("h2", null, "Virtual keys"), holder,
-    h("p", { class: "muted" }, "Apps use these like the master key: Authorization: Bearer <key>. A virtual key can chat and list its own models, nothing else. The master key (GATEWAY_KEY) is not listed here."));
-  holder.replaceChildren(table([["Name"], ["Key"], ["Allowed models"], ["Per minute", 1], ["Requests", 1], ["Created"], ["Status"], [""]], [], ""));
-  refreshTable();
+  refresh();
+  return { refresh, live: false };
 }
 
-async function eventsView(view) {
-  const keys = await api("/admin/api/keys");
-  const result = h("select", { id: "fr", "aria-label": "Result" }, [["", "All results"], ["ok", "ok"], ["blocked", "blocked"], ["provider_error", "provider error"], ["rate_limited", "rate limited"], ["model_denied", "model denied"], ["too_large", "too large"], ["bad_request", "bad request"]].map(([v, l]) => h("option", { value: v }, l)));
-  const who = h("select", { id: "fk", "aria-label": "Key" }, [h("option", { value: "" }, "All keys"), h("option", { value: "master" }, "master key")].concat(keys.data.map((k) => h("option", { value: k.id }, k.name))));
-  const auto = h("input", { type: "checkbox", id: "auto", checked: true });
-  const holder = h("div");
-  async function load() {
-    const q = new URLSearchParams({ since: state.since, limit: 200 });
-    if (result.value) q.set("result", result.value);
-    if (who.value) q.set("key", who.value);
-    const out = await api("/admin/api/events?" + q);
-    const names = { master: "master key" };
-    keys.data.forEach((k) => { names[k.id] = k.name; });
-    holder.replaceChildren(table([["Time"], ["Key"], ["Model"], ["Provider"], ["Status", 1], ["Result"], ["Filter"], ["First byte", 1], ["Total", 1], ["Request id"]],
-      out.data.map((e) => [fmtTime(e.ts), names[e.key] || e.key, e.model || "–", e.provider || "–", e.status, badge(e.result),
-        e.filter ? h("span", { class: "badge " + (e.result === "blocked" ? "bad" : "warn"), title: e.rule || "" }, e.filter + " " + Number(e.score).toFixed(2)) : "–",
-        e.ttfb_ms + " ms", e.total_ms + " ms", h("span", { class: "mono" }, e.request_id)]), "No requests match."));
+function providers(view) {
+  const sel = S.params.provider || "", first = h("div"), ptab = h("div"), mtab = h("div"), mnote = h("span", { class: "muted" });
+  const search = h("input", { type: "text", id: "ms", placeholder: "Filter models", autocomplete: "off", "aria-label": "Filter models" });
+  const psel = h("select", { "aria-label": "Provider", onchange: () => loadModels() }, S.cfg.providers.map((p) => h("option", { value: p.name }, p.name)));
+  if (sel && S.cfg.providers.some((p) => p.name === sel)) psel.value = sel;
+  let models = [], prows = [];
+  const reload = h("button", { class: "btn small", type: "button", onclick: async (e) => { e.currentTarget.disabled = true; try { await api("/v1/models?refresh=1&" + q({ since: S.since })); await refresh(); await loadModels(); } catch (x) { failure(first, refresh)(x); } e.currentTarget.disabled = false; } }, ic("refresh", 14), "Refresh model lists");
+  view.replaceChildren(first, h("section", { class: "panel" }, h("header", null, h("h2", null, "Providers"), h("span", { class: "spacer" }), reload), ptab),
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Models"), psel, search, h("span", { class: "spacer" }), mnote), mtab));
+  async function refresh() {
+    try {
+      const pv = await api("/v1/providers?since=" + S.since); first.replaceChildren(); prows = pv.data;
+      ptab.replaceChildren(pv.data.length ? h("div", { class: "tw" }, h("table", null,
+        h("thead", null, h("tr", null, ["Provider", "Base URL", "Listed models", "Tries", "Error rate", "First byte", "Model list"].map((t, i) => h("th", { class: i === 2 || i === 3 || i === 5 ? "num" : "" }, t)))),
+        h("tbody", null, pv.data.map((p) => h("tr", null, h("td", null, p.name), h("td", { class: "mono faint trunc" }, p.base_url), h("td", { class: "num" }, p.refresh_ok === false ? h("span", { class: "faint" }, "unknown") : fmt(p.models)), h("td", { class: "num" }, p.stats ? fmt(p.stats.requests) : "0"),
+          h("td", null, p.stats ? h("span", { class: "mono" }, pct(p.stats.error_rate)) : h("span", { class: "faint" }, "no tries")), h("td", { class: "num mono" }, p.stats && p.stats.avg_ttfb_ms != null ? fmt(p.stats.avg_ttfb_ms) + " ms" : "none"),
+          h("td", null, p.refresh_ok === false ? h("span", { class: "b bad", title: p.refresh_error || "" }, "Failed: " + (p.refresh_error || "")) : p.refreshed ? h("span", { class: "faint" }, "Updated " + rel(p.refreshed * 1000)) : h("span", { class: "faint" }, "not fetched"))))))) : h("div", { class: "empty" }, "No providers configured."));
+    } catch (e) { failure(first, refresh)(e); }
   }
-  view.replaceChildren(h("div", { class: "bar2" }, h("label", null, "Result", result), h("label", null, "Key", who),
-    h("button", { class: "small", onclick: () => load().catch(() => {}) }, "Refresh"),
-    h("label", { style: "flex-direction:row;align-items:center;gap:6px" }, auto, "Refresh every 5 s")), holder);
-  result.onchange = who.onchange = () => load().catch(() => {});
-  await load();
-  state.timer = setInterval(() => { if (auto.checked) load().catch(() => {}); }, 5000);
+  async function loadModels() {
+    mtab.replaceChildren(skeleton(4));
+    try { models = (await api("/v1/models?" + q({ provider: psel.value, since: S.since }))).data; paintModels(); } catch (e) { failure(mtab, loadModels)(e); }
+  }
+  function paintModels() {
+    const needle = search.value.trim().toLowerCase(), hit = models.filter((m) => m.model.toLowerCase().includes(needle)), shown = hit.slice(0, 100);
+    mnote.textContent = hit.length > shown.length ? "Showing " + shown.length + " of " + fmt(hit.length) : fmt(hit.length) + " models";
+    mtab.replaceChildren(shown.length ? h("div", { class: "tw" }, h("table", null,
+      h("thead", null, h("tr", null, ["Model id", "Listed by provider", "Tries", "Error rate"].map((t, i) => h("th", { class: i >= 2 ? "num" : "" }, t)))),
+      h("tbody", null, shown.map((m) => h("tr", null, h("td", { class: "mono" }, m.id), h("td", null, m.listed ? h("span", { class: "faint" }, "yes") : !(prows.find((p) => p.name === m.provider) || {}).models ? h("span", { class: "faint" }, "no list from provider") : h("span", { class: "b warn", title: "Called through the gateway but not in the provider's own list, for example a retired model" }, "not listed")),
+        h("td", { class: "num" }, m.stats ? fmt(m.stats.requests) : "0"), h("td", { class: "num mono" }, m.stats ? pct(m.stats.error_rate) : "none")))))) : h("div", { class: "empty" }, hit.length === 0 && models.length ? "No model matches that filter." : "This provider has no model list yet. Use Refresh model lists."));
+  }
+  search.addEventListener("input", paintModels);
+  refresh(); if (S.cfg.providers.length) loadModels(); else mtab.replaceChildren(h("div", { class: "empty" }, "No providers configured."));
+  return { refresh, live: false };
 }
 
-async function settings(view) {
-  const c = await api("/admin/api/config");
+function settings(view) {
+  const c = S.cfg, lo = c.filter_log, hi = c.filter_block;
   const row = (k, v) => [h("dt", null, k), h("dd", null, v)];
+  const mb = c.scan_limit_bytes ? Math.round((c.scan_limit_bytes / 1048576) * 10) / 10 + " MB of new text per request" : "no limit";
   view.replaceChildren(
     h("p", { class: "muted" }, c.note),
-    h("dl", null, row("Listening on", c.listen), row("Allowed Host headers", c.allowed_hosts.join(", ")), row("Filters", c.filters.join(", ") || "none"),
-      row("Block at score", c.filter_block), row("Flag at score", c.filter_log), row("Scan system messages", c.scan_system_messages ? "yes" : "no"),
-      row("Scan limit", c.scan_limit_bytes ? Math.round(c.scan_limit_bytes / 1048576 * 10) / 10 + " MB of new text per request" : "none"),
-      row("Max requests at once", c.max_inflight), row("Database", c.database ? c.db_path + " (kept " + c.stats_days + " days)" : "off"), row("Access log", c.access_log)),
-    h("h2", null, "Providers"),
-    table([["Provider"], ["Base URL"], ["Key"]], c.providers.map((p) => [p.name, p.base_url, h("span", { class: "badge " + (p.key_set ? "ok" : "") }, p.key_set ? "set" : "none needed")]), "No providers."));
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Runtime")), h("dl", { class: "kv" },
+      row("Listening on", h("span", { class: "mono" }, c.listen)), row("Allowed Host headers", h("span", { class: "mono" }, c.allowed_hosts.join(", "))),
+      row("Most requests at once", fmt(c.max_inflight)), row("Started", absTime(c.started * 1000) + "  (up " + uptime(c.started) + ")"))),
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Filter")), h("dl", { class: "kv" },
+      row("Filters", c.filters.join(", ") || "none"), row("Flag at score", h("span", { class: "mono" }, lo.toFixed(2))), row("Block at score", h("span", { class: "mono" }, hi.toFixed(2))),
+      row("Scan system messages", c.scan_system_messages ? "yes" : "no"), row("Scan limit", mb))),
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Storage and logs")), h("dl", { class: "kv" },
+      row("Database", c.database ? h("div", { class: "pair" }, h("span", { class: "mono" }, c.db_path), h("span", { class: "muted" }, "Events and stats are kept " + c.stats_days + " days")) : "off"), row("Access log", c.access_log === "off" ? "off" : h("span", { class: "mono" }, c.access_log)))),
+    h("section", { class: "panel" }, h("header", null, h("h2", null, "Providers")), c.providers.length ? h("div", { class: "tw" }, h("table", null,
+      h("thead", null, h("tr", null, h("th", null, "Provider"), h("th", null, "Base URL"), h("th", null, "Key"))),
+      h("tbody", null, c.providers.map((p) => h("tr", null, h("td", null, p.name), h("td", { class: "mono faint" }, p.base_url), h("td", null, h("span", { class: "b " + (p.key_set ? "ok" : "") }, p.key_set ? "set" : "none needed"))))))) : h("div", { class: "empty" }, "No providers configured.")));
+  return { refresh() {}, live: false };
 }
 
-if (!/^https?:$/.test(location.protocol)) {
-  app.replaceChildren(h("div", { class: "login" }, h("div", { class: "panel" }, h("h2", null, "Open this from the gateway"),
-    h("p", null, "This page was opened as a file or preview, so it cannot reach the gateway. Start the gateway, then open its address in your browser, for example http://127.0.0.1:8080/admin."))));
-} else if (key) { api("/admin/api/summary?since=1h").then(showApp).catch(() => {}); } else { showLogin(""); }
+if (S.key) start(); else showLogin("");
 </script>
 </body>
 </html>
