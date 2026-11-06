@@ -6,10 +6,11 @@ What is built, what comes next, and what waits. Sizes are rough: S is a day or l
 
 | Area | What you get |
 |---|---|
-| Proxy | One OpenAI-compatible `/v1/chat/completions`, streaming, 8 providers, fallback chains |
+| Proxy | OpenAI-compatible `/v1/chat/completions` and Anthropic-format `/v1/messages` and OpenAI Responses `/v1/responses` (text, images, tools, streaming), 8 providers, fallback chains |
 | Safety | Bearer key, Host allow-list, JSON only, limits, timeouts, prompt-injection filter (static tokens) |
 | Keys | Virtual keys: name, allowed models (`groq/*`), requests per minute. Secret shown once, hash stored |
-| Admin page | `/admin`: overview with error rates, keys (create, revoke), request log, read-only settings |
+| Admin page | `/admin`: overview with a traffic chart (blocked requests as stems), previous-period comparison and first-byte timing; requests with search and filters; a request inspector; threats by rule; keys (create, revoke, last use); providers and models; read-only settings. Dark, with a matching light theme |
+| Spend | Tokens and cost per request from your own price file, monthly dollar budget per virtual key, spend on the overview and the keys page ([SPEND.md](SPEND.md)) |
 | Logs | `ACCESS_LOG` JSON lines for any log pipeline ([LOGGING.md](LOGGING.md)); same events in SQLite |
 | Stats API | `/v1/models`, `/v1/providers`, `/v1/stats` with error rates |
 | Release | Signed binaries, checksums, dependency list, pinned toolchain |
@@ -18,13 +19,13 @@ What is built, what comes next, and what waits. Sizes are rough: S is a day or l
 
 | Item | Why | Size |
 |---|---|---|
-| **Responses API (`/v1/responses`) and Anthropic Messages (`/v1/messages`)** | Found in testing: Codex CLI dropped chat completions, and Claude Code speaks the Anthropic format. Without these, the two biggest agents cannot connect. Pi works today | L |
 | Longer wait for local models | First call to a cold Ollama model times out at 60 s | S |
 | Scan tool-call arguments and responses (review #5) | The filter only reads what goes in. An injection shows up as a tool call going out | L |
-| Spend and budgets per key | The feature teams ask for first. Needs a price table per model | M |
 | Key expiry and per-key token-per-minute limit | Natural extensions of what exists | S |
 | Edit settings from the page (filter thresholds, limits) | Today these need `.env` and a restart. Needs a safe write path and a restart-free reload | M |
 | Prometheus `/metrics` | Lets existing dashboards work with no new UI | S |
+| Embed the Geist and JetBrains Mono font files in the admin page | Today it uses them only if installed and falls back to system fonts. Embedding needs a download and adds about 150 KB to the binary | S |
+| Time-range picker with custom dates, and per-key charts | The page has 1H, 24H and 7D only | S |
 
 ## Later
 
@@ -47,6 +48,6 @@ What is built, what comes next, and what waits. Sizes are rough: S is a day or l
 - **Admin sign-in is one shared key** (`GATEWAY_KEY`). Anyone with it can create and revoke keys. There is no audit trail yet.
 - **The master key lives in the browser tab's session storage** while you are signed in. A browser extension that reads page storage could see it. The page's script is locked down with a Content Security Policy, but treat the admin page like any admin tool: use a clean browser.
 - **Rate limits reset on restart** and are not shared between copies.
-- **No spend tracking.** Limits are requests per minute only.
+- **Spend is only as good as your price file and what providers report.** A provider that sends no token counts costs nothing here. A budget can be overshot by the requests running when it is reached. Budgets reset on the 1st (UTC) and are per process.
 - **Settings are read-only in the page.**
 - **A virtual key sees only its own models** in `/v1/models`, and cannot read stats or the admin API.

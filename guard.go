@@ -112,6 +112,9 @@ func (g guard) wrap(next http.Handler) http.Handler {
 		// The admin page itself is a static file with no data in it. It asks for the key and then calls the API.
 		if !(r.Method == http.MethodGet && (r.URL.Path == "/admin" || r.URL.Path == "/admin/")) {
 			got, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if got == "" {
+				got = r.Header.Get("x-api-key") // Anthropic-style clients send the key here
+			}
 			var who ident
 			if subtle.ConstantTimeCompare([]byte(got), []byte(g.key)) == 1 {
 				who = ident{ID: "master"}
