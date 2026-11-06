@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"sync/atomic"
@@ -24,6 +25,7 @@ import (
 //	blocked         the filter refused it
 //	rate_limited    the key went over its requests per minute
 //	model_denied    the key may not use that model
+//	over_budget     the key has used its monthly budget
 //	too_large       body or new text over the limit
 //	bad_request     not valid JSON, or an unknown provider
 type event struct {
@@ -40,11 +42,16 @@ type event struct {
 	Score    float64   `json:"score,omitempty"`
 	TTFBMS   int64     `json:"ttfb_ms"`
 	TotalMS  int64     `json:"total_ms"`
+	InTok    int       `json:"in_tokens,omitempty"`
+	OutTok   int       `json:"out_tokens,omitempty"`
+	CostUSD  float64   `json:"cost_usd,omitempty"` // 0 when the model has no price
 }
 
 // reqInfo is filled in by the chat handler while it works and read once by logged() at the end.
 type reqInfo struct {
 	id, model, provider, result string
+	used                        string // provider/model that answered
+	inTok, outTok               int
 	v                           verdict
 	flagged                     bool
 	ttfb                        int64
@@ -100,7 +107,13 @@ func logged(st *store, next http.HandlerFunc) http.Handler {
 		}
 		e := event{TS: start, ReqID: ri.id, Key: identOf(r).ID, Model: ri.model, Provider: ri.provider, Status: sw.status,
 			Result: result, Flagged: ri.flagged, Filter: ri.v.filter, Rule: ri.v.rule, Score: ri.v.score,
-			TTFBMS: ri.ttfb, TotalMS: time.Since(start).Milliseconds()}
+			TTFBMS: ri.ttfb, TotalMS: time.Since(start).Milliseconds(), InTok: ri.inTok, OutTok: ri.outTok}
+		if p, ok := priceOf(ri.used); ok && ri.used != "" {
+			e.CostUSD = math.Round(p.cost(ri.inTok, ri.outTok)*1e6) / 1e6
+			if k := identOf(r).Key; k != nil && e.CostUSD > 0 {
+				st.keys.addSpend(k.ID, e.CostUSD)
+			}
+		}
 		if e.Score < 0.01 { // nothing matched: keep the line short
 			e.Filter, e.Rule, e.Score = "", "", 0
 		}

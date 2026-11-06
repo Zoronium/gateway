@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ type keyRec struct {
 	Revoked          bool
 	Models           []string // allowed models: "groq/*", "ollama/qwen2.5:0.5b", "*". Empty means all.
 	RPM              int      // requests per minute, 0 means no limit
+	BudgetUSD        float64  // US dollars a calendar month (UTC), 0 means no budget
 }
 
 type bucket struct {
@@ -32,10 +34,12 @@ type keyring struct {
 	mu      sync.Mutex
 	byHash  map[string]*keyRec // active keys only
 	buckets map[string]*bucket
+	spent   map[string]float64 // dollars this month, by key id
+	month   time.Time          // the month spent covers
 }
 
 func newKeyring(st *store) *keyring {
-	return &keyring{st: st, byHash: map[string]*keyRec{}, buckets: map[string]*bucket{}}
+	return &keyring{st: st, byHash: map[string]*keyRec{}, buckets: map[string]*bucket{}, spent: map[string]float64{}, month: monthStart(time.Now())}
 }
 
 func hashKey(secret string) string {
@@ -71,13 +75,16 @@ func (k *keyring) lookup(secret string) (*keyRec, bool) {
 var modelPattern = regexp.MustCompile(`^[A-Za-z0-9._:/@*-]{1,200}$`)
 
 // create makes a key and returns its secret. This is the only time the secret exists in clear.
-func (k *keyring) create(name string, models []string, rpm int) (keyRec, string, error) {
+func (k *keyring) create(name string, models []string, rpm int, budget float64) (keyRec, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 64 {
 		return keyRec{}, "", fmt.Errorf("name must be 1 to 64 characters")
 	}
 	if rpm < 0 || rpm > 1_000_000 {
 		return keyRec{}, "", fmt.Errorf("rpm must be between 0 and 1000000 (0 means no limit)")
+	}
+	if budget < 0 || budget > 1e9 || math.IsNaN(budget) {
+		return keyRec{}, "", fmt.Errorf("budget_usd must be between 0 and 1000000000 (0 means no budget)")
 	}
 	var clean []string
 	for _, m := range models {
@@ -94,7 +101,7 @@ func (k *keyring) create(name string, models []string, rpm int) (keyRec, string,
 	secret := "sk-gw-" + hex.EncodeToString(b)
 	idb := make([]byte, 4)
 	rand.Read(idb)
-	rec := keyRec{ID: "key_" + hex.EncodeToString(idb), Name: name, Prefix: secret[:10], Created: time.Now().UTC().Truncate(time.Second), Models: clean, RPM: rpm}
+	rec := keyRec{ID: "key_" + hex.EncodeToString(idb), Name: name, Prefix: secret[:10], Created: time.Now().UTC().Truncate(time.Second), Models: clean, RPM: rpm, BudgetUSD: budget}
 	if err := k.st.insertKey(rec, hashKey(secret)); err != nil {
 		return keyRec{}, "", err
 	}
@@ -119,6 +126,7 @@ func (k *keyring) revoke(id string) (bool, error) {
 		}
 	}
 	delete(k.buckets, id)
+	delete(k.spent, id)
 	return true, nil
 }
 
@@ -164,4 +172,32 @@ func (k *keyring) allow(id string, rpm int) (bool, time.Duration) {
 		return true, 0
 	}
 	return false, time.Duration((1 - b.tokens) / rate * float64(time.Second))
+}
+
+// rollMonth forgets last month's spend. Call with k.mu held.
+func (k *keyring) rollMonth(now time.Time) {
+	if m := monthStart(now); m.After(k.month) {
+		k.month, k.spent = m, map[string]float64{}
+	}
+}
+
+// spentThisMonth is what the key has cost so far this calendar month (UTC).
+func (k *keyring) spentThisMonth(id string) float64 {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.rollMonth(time.Now())
+	return k.spent[id]
+}
+
+func (k *keyring) addSpend(id string, usd float64) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.rollMonth(time.Now())
+	k.spent[id] += usd
+}
+
+// overBudget reports whether the key has used up its monthly budget. Requests already running when it
+// crosses the line still finish, so a key can overshoot by what its in-flight requests cost.
+func (k *keyring) overBudget(r *keyRec) bool {
+	return r.BudgetUSD > 0 && k.spentThisMonth(r.ID) >= r.BudgetUSD
 }

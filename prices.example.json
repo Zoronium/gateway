@@ -1,0 +1,5 @@
+{
+  "openai/gpt-4o-mini": { "in": 0.15, "out": 0.60 },
+  "groq/*": { "in": 0, "out": 0 },
+  "ollama/*": { "in": 0, "out": 0 }
+}

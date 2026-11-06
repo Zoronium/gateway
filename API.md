@@ -75,8 +75,9 @@ Used by the admin page at `/admin`. A virtual key gets 403 on all of these, and 
 
 | Endpoint | What |
 |---|---|
-| `GET /admin/api/summary?since=24h` | Requests by result and by key, flagged count, provider error rate, average time |
-| `GET /admin/api/events?since=24h&result=blocked&key=<id>&limit=100` | Recent requests, newest first |
+| `GET /admin/api/summary?since=24h` | This period and the one before it (requests, blocked, flagged, refused, provider errors), first-byte p50 and p95 for answered requests, counts by result, by key (with last use) and by filter rule |
+| `GET /admin/api/series?since=24h&buckets=60` | Requests in equal time buckets (total, ok, blocked, flagged, limited, errors), for the traffic chart |
+| `GET /admin/api/events?since=24h&limit=100` | Recent requests, newest first. Optional: `result=blocked` (or a list such as `rate_limited,model_denied`), `key=<id>`, `q=<text>` (request id, model, key id or key name), `threat=1` (blocked or flagged), `attention=1` (anything an operator should look at: not ok and not a bad request, or flagged) |
 | `GET /admin/api/keys` | Virtual keys (never the secret) |
 | `POST /admin/api/keys` | `{"name":"my app","models":["groq/*"],"rpm":60}`. The secret is in the answer once |
 | `POST /admin/api/keys/{id}/revoke` | Stops a key at once |

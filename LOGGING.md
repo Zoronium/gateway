@@ -23,10 +23,11 @@ stdout carries only these lines, so a pipe is clean. The normal text log stays o
 | `model` | What the client asked for, cut at 200 characters |
 | `provider` | The provider that answered or failed last. Missing if the request never reached one |
 | `status` | HTTP status the client received |
-| `result` | `ok`, `provider_error`, `blocked`, `rate_limited`, `model_denied`, `too_large`, `bad_request` |
+| `result` | `ok`, `provider_error`, `blocked`, `rate_limited`, `model_denied`, `over_budget`, `too_large`, `bad_request` |
 | `flagged` | `true` when the filter scored it medium and let it through |
 | `filter`, `rule`, `score` | What the filter saw. For you only: clients never get the rule or score |
 | `ttfb_ms`, `total_ms` | Time to the provider's first byte, and total time |
+| `in_tokens`, `out_tokens`, `cost_usd` | Tokens the provider reported, and what they cost by your price file ([SPEND.md](SPEND.md)). Missing when the provider reported none, and `cost_usd` is missing when the model has no price |
 
 **Never in a line:** the prompt, the answer, any API key, the client's address. Keep it that way if you add fields.
 

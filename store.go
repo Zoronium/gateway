@@ -34,6 +34,14 @@ CREATE TABLE IF NOT EXISTS keys (
 	id TEXT PRIMARY KEY, name TEXT NOT NULL, hash TEXT NOT NULL UNIQUE, prefix TEXT NOT NULL,
 	created INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, models TEXT NOT NULL DEFAULT '', rpm INTEGER NOT NULL DEFAULT 0);`
 
+// Columns added after the first release. Each is added once; an old database is upgraded in place.
+var migrations = []string{
+	`ALTER TABLE events ADD COLUMN in_tok INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE events ADD COLUMN out_tok INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE events ADD COLUMN cost_u INTEGER NOT NULL DEFAULT 0`, // millionths of a US dollar
+	`ALTER TABLE keys ADD COLUMN budget REAL NOT NULL DEFAULT 0`,
+}
+
 // One row per try at a provider. A fallback chain makes one row per provider it tried.
 type attempt struct {
 	ts              time.Time
@@ -82,11 +90,20 @@ func openStore(path string, keepDays int) (*store, error) {
 		db.Close()
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
+	for _, m := range migrations {
+		if _, err := db.Exec(m); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			db.Close()
+			return nil, fmt.Errorf("upgrade %s: %w", path, err)
+		}
+	}
 	s := &store{db: db, in: make(chan attempt, 1024), evc: make(chan event, 1024), flushc: make(chan chan struct{}), quit: make(chan struct{}), done: make(chan struct{})}
 	s.keys = newKeyring(s)
 	if err := s.keys.load(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("load keys: %w", err)
+	}
+	if spent, err := s.spentSince(monthStart(time.Now())); err == nil {
+		s.keys.spent = spent
 	}
 	s.prune(keepDays)
 	go s.run(keepDays)
@@ -229,7 +246,7 @@ func (s *store) insertEvents(batch []event) error {
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(`INSERT INTO events (ts, req_id, key_id, model, provider, status, result, flagged, filter, rule, score, ttfb_ms, total_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	stmt, err := tx.Prepare(`INSERT INTO events (ts, req_id, key_id, model, provider, status, result, flagged, filter, rule, score, ttfb_ms, total_ms, in_tok, out_tok, cost_u) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -240,7 +257,7 @@ func (s *store) insertEvents(batch []event) error {
 		if e.Flagged {
 			fl = 1
 		}
-		if _, err := stmt.Exec(e.TS.Unix(), e.ReqID, e.Key, e.Model, e.Provider, e.Status, e.Result, fl, e.Filter, e.Rule, e.Score, e.TTFBMS, e.TotalMS); err != nil {
+		if _, err := stmt.Exec(e.TS.Unix(), e.ReqID, e.Key, e.Model, e.Provider, e.Status, e.Result, fl, e.Filter, e.Rule, e.Score, e.TTFBMS, e.TotalMS, e.InTok, e.OutTok, micro(e.CostUSD)); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -248,19 +265,51 @@ func (s *store) insertEvents(batch []event) error {
 	return tx.Commit()
 }
 
-// listEvents returns the newest events first. An empty result or key means any.
-func (s *store) listEvents(since time.Time, result, key string, limit int) ([]event, error) {
-	q := `SELECT ts, req_id, key_id, model, provider, status, result, flagged, filter, rule, score, ttfb_ms, total_ms FROM events WHERE ts >= ?`
-	args := []any{since.Unix()}
-	if result != "" {
-		q += ` AND result = ?`
-		args = append(args, result)
+// eventFilter narrows listEvents. Zero values mean any.
+type eventFilter struct {
+	Since  time.Time
+	Result string
+	Key    string
+	Q      string // matches a request id, a model, a key id or a key name
+	Threat bool   // blocked, or flagged and let through
+	// Attention is anything an operator should look at: a failure, a refusal, a block or a flag.
+	// A bad request is the caller's mistake, so it is left out.
+	Attention bool
+	Limit     int
+}
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// listEvents returns the newest events first.
+func (s *store) listEvents(f eventFilter) ([]event, error) {
+	q := `SELECT ts, req_id, key_id, model, provider, status, result, flagged, filter, rule, score, ttfb_ms, total_ms, in_tok, out_tok, cost_u FROM events WHERE ts >= ?`
+	args := []any{f.Since.Unix()}
+	if f.Result != "" {
+		parts := strings.Split(f.Result, ",") // "rate_limited,model_denied" matches either
+		if len(parts) > 8 {
+			parts = parts[:8]
+		}
+		q += ` AND result IN (?` + strings.Repeat(`,?`, len(parts)-1) + `)`
+		for _, p := range parts {
+			args = append(args, strings.TrimSpace(p))
+		}
 	}
-	if key != "" {
+	if f.Attention {
+		q += ` AND (result NOT IN ('ok', 'bad_request') OR flagged = 1)`
+	}
+	if f.Key != "" {
 		q += ` AND key_id = ?`
-		args = append(args, key)
+		args = append(args, f.Key)
 	}
-	rows, err := s.db.Query(q+` ORDER BY ts DESC, rowid DESC LIMIT ?`, append(args, limit)...)
+	if f.Threat {
+		q += ` AND (result = 'blocked' OR flagged = 1)`
+	}
+	if f.Q != "" {
+		like := "%" + likeEscaper.Replace(f.Q) + "%"
+		q += ` AND (req_id LIKE ? ESCAPE '\' OR model LIKE ? ESCAPE '\' OR key_id LIKE ? ESCAPE '\' OR key_id IN (SELECT id FROM keys WHERE name LIKE ? ESCAPE '\'))`
+		args = append(args, like, like, like, like)
+	}
+	rows, err := s.db.Query(q+` ORDER BY ts DESC, rowid DESC LIMIT ?`, append(args, f.Limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -270,10 +319,11 @@ func (s *store) listEvents(since time.Time, result, key string, limit int) ([]ev
 		var e event
 		var ts int64
 		var fl int
-		if err := rows.Scan(&ts, &e.ReqID, &e.Key, &e.Model, &e.Provider, &e.Status, &e.Result, &fl, &e.Filter, &e.Rule, &e.Score, &e.TTFBMS, &e.TotalMS); err != nil {
+		var cost int64
+		if err := rows.Scan(&ts, &e.ReqID, &e.Key, &e.Model, &e.Provider, &e.Status, &e.Result, &fl, &e.Filter, &e.Rule, &e.Score, &e.TTFBMS, &e.TotalMS, &e.InTok, &e.OutTok, &cost); err != nil {
 			return nil, err
 		}
-		e.TS, e.Flagged = time.Unix(ts, 0).UTC(), fl == 1
+		e.TS, e.Flagged, e.CostUSD = time.Unix(ts, 0).UTC(), fl == 1, float64(cost)/1e6
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -290,6 +340,8 @@ type keyCount struct {
 	Key             string
 	Count, Blocked  int
 	LimitedOrDenied int
+	LastSeen        int64
+	CostUSD         float64
 }
 
 // eventSummary counts events by result and by key since a time.
@@ -308,7 +360,7 @@ func (s *store) eventSummary(since time.Time) ([]resultCount, []keyCount, error)
 		byResult = append(byResult, r)
 	}
 	rows.Close()
-	rows, err = s.db.Query(`SELECT key_id, COUNT(*), COALESCE(SUM(result='blocked'),0), COALESCE(SUM(result IN ('rate_limited','model_denied')),0) FROM events WHERE ts >= ? GROUP BY key_id ORDER BY COUNT(*) DESC`, since.Unix())
+	rows, err = s.db.Query(`SELECT key_id, COUNT(*), COALESCE(SUM(result='blocked'),0), COALESCE(SUM(result IN ('rate_limited','model_denied','over_budget')),0), MAX(ts), COALESCE(SUM(cost_u),0) FROM events WHERE ts >= ? GROUP BY key_id ORDER BY COUNT(*) DESC`, since.Unix())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -316,17 +368,119 @@ func (s *store) eventSummary(since time.Time) ([]resultCount, []keyCount, error)
 	var byKey []keyCount
 	for rows.Next() {
 		var k keyCount
-		if err := rows.Scan(&k.Key, &k.Count, &k.Blocked, &k.LimitedOrDenied); err != nil {
+		var c int64
+		if err := rows.Scan(&k.Key, &k.Count, &k.Blocked, &k.LimitedOrDenied, &k.LastSeen, &c); err != nil {
 			return nil, nil, err
 		}
+		k.CostUSD = float64(c) / 1e6
 		byKey = append(byKey, k)
 	}
 	return byResult, byKey, rows.Err()
 }
 
+type totals struct {
+	Requests, Blocked, Flagged, ProviderErrors, Refused int
+	InTok, OutTok                                       int64
+	CostUSD                                             float64
+}
+
+// totals counts events in [from, to). The admin page compares this period with the one before it.
+func (s *store) totals(from, to time.Time) (t totals, err error) {
+	var cost int64
+	err = s.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(result='blocked'),0), COALESCE(SUM(flagged),0), COALESCE(SUM(result='provider_error'),0),
+		COALESCE(SUM(result IN ('rate_limited','model_denied','too_large','over_budget')),0),
+		COALESCE(SUM(in_tok),0), COALESCE(SUM(out_tok),0), COALESCE(SUM(cost_u),0) FROM events WHERE ts >= ? AND ts < ?`, from.Unix(), to.Unix()).
+		Scan(&t.Requests, &t.Blocked, &t.Flagged, &t.ProviderErrors, &t.Refused, &t.InTok, &t.OutTok, &cost)
+	t.CostUSD = float64(cost) / 1e6
+	return
+}
+
+// firstByte returns the median and 95th percentile time to the provider's first byte for answered
+// requests, and how many there were. First byte is used because a streamed answer's total time
+// depends on how long the answer is.
+func (s *store) firstByte(since time.Time) (p50, p95 int64, n int, err error) {
+	if err = s.db.QueryRow(`SELECT COUNT(*) FROM events WHERE ts >= ? AND result = 'ok'`, since.Unix()).Scan(&n); err != nil || n == 0 {
+		return
+	}
+	at := func(p float64) (v int64, err error) {
+		err = s.db.QueryRow(`SELECT ttfb_ms FROM events WHERE ts >= ? AND result = 'ok' ORDER BY ttfb_ms LIMIT 1 OFFSET ?`, since.Unix(), int(float64(n-1)*p)).Scan(&v)
+		return
+	}
+	if p50, err = at(0.5); err != nil {
+		return
+	}
+	p95, err = at(0.95)
+	return
+}
+
+type ruleCount struct {
+	Filter, Rule   string
+	Count, Blocked int
+}
+
+// rules counts what the filter caught, by the rule that matched, most common first.
+func (s *store) rules(since time.Time) ([]ruleCount, error) {
+	rows, err := s.db.Query(`SELECT filter, rule, COUNT(*), COALESCE(SUM(result='blocked'),0) FROM events
+		WHERE ts >= ? AND filter != '' AND (result = 'blocked' OR flagged = 1) GROUP BY filter, rule ORDER BY COUNT(*) DESC, rule LIMIT 20`, since.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ruleCount{}
+	for rows.Next() {
+		var r ruleCount
+		if err := rows.Scan(&r.Filter, &r.Rule, &r.Count, &r.Blocked); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+type seriesBucket struct {
+	T                                    int64 `json:"t"`
+	Total, OK, Blocked, Flagged, Limited int
+	Errors                               int
+}
+
+// series counts events in n equal buckets of step seconds starting at from, for the traffic chart.
+func (s *store) series(from time.Time, step int64, n int) ([]seriesBucket, error) {
+	out := make([]seriesBucket, n)
+	for i := range out {
+		out[i].T = from.Unix() + int64(i)*step
+	}
+	rows, err := s.db.Query(`SELECT (ts - ?) / ?, COUNT(*), COALESCE(SUM(result='ok'),0), COALESCE(SUM(result='blocked'),0), COALESCE(SUM(flagged),0),
+		COALESCE(SUM(result IN ('rate_limited','model_denied','too_large','over_budget')),0), COALESCE(SUM(result='provider_error'),0) FROM events WHERE ts >= ? GROUP BY 1`,
+		from.Unix(), step, from.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var i int64
+		var b seriesBucket
+		if err := rows.Scan(&i, &b.Total, &b.OK, &b.Blocked, &b.Flagged, &b.Limited, &b.Errors); err != nil {
+			return nil, err
+		}
+		if i >= int64(n) {
+			i = int64(n) - 1 // a request that arrived while this was running
+		}
+		if i >= 0 {
+			b.T = out[i].T
+			out[i].Total += b.Total
+			out[i].OK += b.OK
+			out[i].Blocked += b.Blocked
+			out[i].Flagged += b.Flagged
+			out[i].Limited += b.Limited
+			out[i].Errors += b.Errors
+		}
+	}
+	return out, rows.Err()
+}
+
 func (s *store) insertKey(r keyRec, hash string) error {
-	_, err := s.db.Exec(`INSERT INTO keys (id, name, hash, prefix, created, revoked, models, rpm) VALUES (?,?,?,?,?,0,?,?)`,
-		r.ID, r.Name, hash, r.Prefix, r.Created.Unix(), strings.Join(r.Models, ","), r.RPM)
+	_, err := s.db.Exec(`INSERT INTO keys (id, name, hash, prefix, created, revoked, models, rpm, budget) VALUES (?,?,?,?,?,0,?,?,?)`,
+		r.ID, r.Name, hash, r.Prefix, r.Created.Unix(), strings.Join(r.Models, ","), r.RPM, r.BudgetUSD)
 	return err
 }
 
@@ -341,7 +495,7 @@ func (s *store) setRevoked(id string) (bool, error) {
 
 // allKeys returns every key, revoked ones included, with the hash for the cache.
 func (s *store) allKeys() (recs []keyRec, hashes []string, err error) {
-	rows, err := s.db.Query(`SELECT id, name, hash, prefix, created, revoked, models, rpm FROM keys ORDER BY created, id`)
+	rows, err := s.db.Query(`SELECT id, name, hash, prefix, created, revoked, models, rpm, budget FROM keys ORDER BY created, id`)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -351,7 +505,7 @@ func (s *store) allKeys() (recs []keyRec, hashes []string, err error) {
 		var h, models string
 		var created int64
 		var revoked int
-		if err := rows.Scan(&r.ID, &r.Name, &h, &r.Prefix, &created, &revoked, &models, &r.RPM); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &h, &r.Prefix, &created, &revoked, &models, &r.RPM, &r.BudgetUSD); err != nil {
 			return nil, nil, err
 		}
 		r.Created, r.Revoked = time.Unix(created, 0).UTC(), revoked == 1
@@ -485,6 +639,25 @@ func (s *store) refreshes() (map[string]refreshInfo, error) {
 		}
 		r.OK = ok == 1
 		out[p] = r
+	}
+	return out, rows.Err()
+}
+
+// spentSince sums what each key has cost since a time, in dollars.
+func (s *store) spentSince(from time.Time) (map[string]float64, error) {
+	rows, err := s.db.Query(`SELECT key_id, SUM(cost_u) FROM events WHERE ts >= ? AND cost_u > 0 GROUP BY key_id`, from.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]float64{}
+	for rows.Next() {
+		var id string
+		var c int64
+		if err := rows.Scan(&id, &c); err != nil {
+			return nil, err
+		}
+		out[id] = float64(c) / 1e6
 	}
 	return out, rows.Err()
 }
