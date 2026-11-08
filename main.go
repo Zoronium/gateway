@@ -133,6 +133,7 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 				return
 			}
 			ri.model = model
+			ri.estIn = len(raw)/4 + 1
 			if len(ri.model) > 200 {
 				ri.model = ri.model[:200]
 			}
@@ -197,8 +198,15 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 			}
 			var stream bool
 			json.Unmarshal(body["stream"], &stream)
-			if stream && body["stream_options"] == nil {
-				body["stream_options"] = json.RawMessage(`{"include_usage":true}`) // so the provider reports tokens for the spend count
+			if stream {
+				// Always ask the provider to report tokens, whatever the client sent, so a client cannot switch spend counting off.
+				opts := map[string]json.RawMessage{}
+				json.Unmarshal(body["stream_options"], &opts)
+				if opts == nil { // the client sent null
+					opts = map[string]json.RawMessage{}
+				}
+				opts["include_usage"] = json.RawMessage(`true`)
+				body["stream_options"], _ = json.Marshal(opts)
 			}
 			for i, t := range targets {
 				last := i == len(targets)-1

@@ -285,8 +285,10 @@ func (a *admin) createKey(w http.ResponseWriter, r *http.Request) {
 		RPM    int      `json:"rpm"`
 		Budget float64  `json:"budget_usd"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&in); err != nil {
-		jsonError(w, http.StatusBadRequest, "bad_json", "Body must be JSON like {\"name\":\"my app\",\"models\":[\"groq/*\"],\"rpm\":60}.")
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	dec.DisallowUnknownFields() // a typo such as "budget" must not quietly create a key with no limit
+	if err := dec.Decode(&in); err != nil {
+		jsonError(w, http.StatusBadRequest, "bad_json", "Body must be JSON like {\"name\":\"my app\",\"models\":[\"groq/*\"],\"rpm\":60,\"budget_usd\":25} ("+err.Error()+").")
 		return
 	}
 	rec, secret, err := a.st.keys.create(in.Name, in.Models, in.RPM, in.Budget)

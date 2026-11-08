@@ -41,7 +41,7 @@ func virtual(w http.ResponseWriter, r *http.Request) bool {
 	if identOf(r).Key == nil {
 		return false
 	}
-	jsonError(w, http.StatusForbidden, "admin_only", "This needs the master gateway key. Virtual keys can only call /v1/chat/completions and /v1/models.")
+	jsonError(w, http.StatusForbidden, "admin_only", "This needs the master gateway key. Virtual keys can only call the chat, messages and responses endpoints and /v1/models.")
 	return true
 }
 
@@ -111,7 +111,10 @@ func (g guard) wrap(next http.Handler) http.Handler {
 		}
 		// The admin page itself is a static file with no data in it. It asks for the key and then calls the API.
 		if !(r.Method == http.MethodGet && (r.URL.Path == "/admin" || r.URL.Path == "/admin/")) {
-			got, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			got := ""
+			if a := r.Header.Get("Authorization"); len(a) > 7 && strings.EqualFold(a[:7], "Bearer ") {
+				got = a[7:]
+			}
 			if got == "" {
 				got = r.Header.Get("x-api-key") // Anthropic-style clients send the key here
 			}

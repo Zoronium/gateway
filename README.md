@@ -17,11 +17,11 @@ Or build it yourself: `go build -trimpath .` (Go 1.27.3, pinned in `go.mod`).
 
 - **Providers:** openai, anthropic (compatibility endpoint), openrouter, groq, nvidia, mistral, huggingface, ollama.
 - **Streaming:** server-sent events pass straight through.
-- **Filter:** scores new request text and tool results, blocks high scores with a 403 and flags medium ones. Details and limits in [RESULTS.md](RESULTS.md).
+- **Filter:** a heuristic tripwire, not protection. It scores new request text and tool results, blocks high scores with a 403 and flags medium ones. It misses most paraphrases and only reads input. Details and limits in [RESULTS.md](RESULTS.md).
 - **Safety defaults:** bearer key required, Host allow-list, JSON only, request and scan limits, server timeouts.
 - **Stats:** `GET /v1/models`, `/v1/providers`, `/v1/stats` with error rates, stored in SQLite ([API.md](API.md)).
 - **Admin page:** `/admin` (sign in with `GATEWAY_KEY`): traffic chart with blocked requests marked, error rates and timing against the previous period, a searchable request log with a per-request inspector, what the filter caught by rule, virtual keys with allowed models and requests-per-minute limits, providers and models, read-only settings. Dark, with a light theme that follows your system.
-- **Spend and budgets:** tokens and cost per request from a price file you supply, and a monthly dollar budget per virtual key ([SPEND.md](SPEND.md)).
+- **Spend and budgets:** tokens and cost per request from a price file you supply, and a monthly dollar budget per virtual key. Treat budgets as advisory: they are estimates and per process ([SPEND.md](SPEND.md)).
 - **Logs for pipelines:** `ACCESS_LOG=stdout` writes one JSON line per request, never prompts or keys ([LOGGING.md](LOGGING.md)).
 - **Roadmap:** what is next and what waits is in [ROADMAP.md](ROADMAP.md).
 
@@ -32,3 +32,7 @@ No plugins, no response scanning, no PII masking. The admin page is a small MVP 
 ## Security
 
 Report problems privately through GitHub security advisories on this repo.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

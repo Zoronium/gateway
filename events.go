@@ -52,6 +52,7 @@ type reqInfo struct {
 	id, model, provider, result string
 	used                        string // provider/model that answered
 	inTok, outTok               int
+	estIn                       int // request bytes over four: charged when the provider reports no tokens
 	v                           verdict
 	flagged                     bool
 	ttfb                        int64
@@ -108,6 +109,11 @@ func logged(st *store, next http.HandlerFunc) http.Handler {
 		e := event{TS: start, ReqID: ri.id, Key: identOf(r).ID, Model: ri.model, Provider: ri.provider, Status: sw.status,
 			Result: result, Flagged: ri.flagged, Filter: ri.v.filter, Rule: ri.v.rule, Score: ri.v.score,
 			TTFBMS: ri.ttfb, TotalMS: time.Since(start).Milliseconds(), InTok: ri.inTok, OutTok: ri.outTok}
+		if ri.used != "" && ri.inTok+ri.outTok == 0 {
+			// The provider reported nothing: a client hung up before the final usage chunk, or the provider sends none.
+			// Charge the input at four bytes a token rather than book the request as free.
+			e.InTok, ri.inTok = ri.estIn, ri.estIn
+		}
 		if p, ok := priceOf(ri.used); ok && ri.used != "" {
 			e.CostUSD = math.Round(p.cost(ri.inTok, ri.outTok)*1e6) / 1e6
 			if k := identOf(r).Key; k != nil && e.CostUSD > 0 {
