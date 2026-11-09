@@ -26,7 +26,15 @@ provider's pricing page and check them now and then. The example file is a shape
   missing price can never be a way around the budget. Give free and local models a price of 0.
 - **Streaming:** the gateway always sets `stream_options.include_usage` on a streamed chat request, whatever the
   client sent, so the provider reports tokens in a final chunk. Clients that follow the OpenAI format ignore the extra chunk.
-- **A provider that reports no tokens is charged for its input only**, estimated at four bytes a token. The same goes for a client that hangs up before the final usage chunk. Output is not estimated, so check a new provider with a few requests.
-- **A budget can be overshot** by what the requests already running cost when it is reached.
+- **A request is held at its worst case before it is sent:** its input (four bytes a token) plus `max_tokens` (or
+  `max_completion_tokens`, or `max_output_tokens`) at the model's output price. A request with no limit is assumed
+  to be allowed 4096 tokens. If what is already spent, plus what requests still running may cost, plus this
+  request would pass the budget, it is refused with 403 `budget_exceeded` before it reaches the provider. So
+  requests running at the same time cannot together pass the budget. A budgeted key should send a sensible
+  `max_tokens`; a very large one can be refused even when the real answer would be short.
+- **When the real cost is known, that is what is charged.** If the provider reports no tokens, the stream was cut
+  off, or the client hung up before the final usage chunk, the key is charged the worst case above, so hanging
+  up cannot dodge the budget. The tokens shown for such a request are that estimate, not a count.
+- **The reserve is only as good as `max_tokens` and your prices.** A provider that generates more than the limit it was given, or a stale price, still costs more than the gateway counts.
 - **Per process.** Spend is read back from the database at start, but two gateway copies do not share it.
 - Only virtual keys have budgets. The master key is never limited.

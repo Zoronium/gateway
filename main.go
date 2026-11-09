@@ -18,10 +18,62 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
-const maxBody = 10 << 20
+// maxBody caps a request body (and a provider's plain answer). MAX_BODY_MB changes it. A large body is held in
+// memory once per running request, so a high cap multiplied by MAX_INFLIGHT is the worst case for memory.
+var maxBody int64 = 4 << 20
+
+// streamIdle is how long a provider may send nothing mid-answer before the gateway gives up on it and frees the slot.
+var streamIdle = 120 * time.Second
+
+// defaultMaxOut is what a request with no max_tokens is assumed to be allowed to generate, for the budget reserve.
+const defaultMaxOut = 4096
+
+// outCap reads the most output tokens a chat body allows, or defaultMaxOut when it sets no limit.
+func outCap(body map[string]json.RawMessage) int {
+	n := 0
+	for _, k := range []string{"max_tokens", "max_completion_tokens"} {
+		var v float64
+		if json.Unmarshal(body[k], &v) == nil && v > 0 && v < 1e9 {
+			n = max(n, int(v))
+		}
+	}
+	if n == 0 {
+		return defaultMaxOut
+	}
+	return n
+}
+
+var errIdle = errors.New("provider stopped sending")
+
+// idleBody ends a provider answer that goes quiet for too long: it cancels the request and the next read fails
+// with errIdle, so a stalled upstream cannot hold a slot forever.
+type idleBody struct {
+	io.ReadCloser
+	t     *time.Timer
+	d     time.Duration
+	fired atomic.Bool
+}
+
+func newIdleBody(rc io.ReadCloser, d time.Duration, cancel context.CancelFunc) *idleBody {
+	b := &idleBody{ReadCloser: rc, d: d}
+	b.t = time.AfterFunc(d, func() { b.fired.Store(true); cancel() })
+	return b
+}
+
+func (b *idleBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if b.fired.Load() {
+		return n, errIdle
+	}
+	b.t.Reset(b.d)
+	return n, err
+}
+
+func (b *idleBody) Close() error { b.t.Stop(); return b.ReadCloser.Close() }
 
 type provider struct {
 	base *url.URL
@@ -134,6 +186,7 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 			}
 			ri.model = model
 			ri.estIn = len(raw)/4 + 1
+			ri.maxOut = outCap(body)
 			if len(ri.model) > 200 {
 				ri.model = ri.model[:200]
 			}
@@ -208,12 +261,29 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 				opts["include_usage"] = json.RawMessage(`true`)
 				body["stream_options"], _ = json.Marshal(opts)
 			}
+			if who.Key != nil && who.Key.BudgetUSD > 0 {
+				// Hold back the worst case (the input, plus max_tokens at the output price) before sending, so requests
+				// running at the same time cannot together spend past the budget. logged() settles it when the request ends.
+				worst := 0.0
+				for _, t := range targets {
+					p, _ := priceOf(t.name + "/" + t.model)
+					worst = max(worst, p.cost(ri.estIn, ri.maxOut))
+				}
+				if !st.keys.reserve(who.Key, worst) {
+					ri.result = "over_budget"
+					jsonError(w, http.StatusForbidden, "budget_exceeded", fmt.Sprintf("This request could cost up to $%.4f (its input plus max_tokens at the model's price), which would pass this key's monthly budget of $%s, counting requests still running. Lower max_tokens, wait for running requests, or ask an admin to raise the budget (request %s).", worst, strconv.FormatFloat(who.Key.BudgetUSD, 'f', -1, 64), reqID))
+					return
+				}
+				ri.reserved = worst
+			}
+			ctx, cancel := context.WithCancel(r.Context())
+			defer cancel()
 			for i, t := range targets {
 				last := i == len(targets)-1
 				b, _ := json.Marshal(t.model)
 				body["model"] = b
 				out, _ := json.Marshal(body)
-				req, _ := http.NewRequestWithContext(r.Context(), "POST", t.p.base.JoinPath("chat/completions").String(), bytes.NewReader(out))
+				req, _ := http.NewRequestWithContext(ctx, "POST", t.p.base.JoinPath("chat/completions").String(), bytes.NewReader(out))
 				req.Header.Set("Content-Type", "application/json")
 				if a := r.Header.Get("Accept"); a != "" {
 					req.Header.Set("Accept", a)
@@ -242,6 +312,7 @@ func newHandler(ps map[string]provider, pol policy, st *store) http.Handler {
 					continue
 				}
 				class := classify(resp.StatusCode, nil)
+				resp.Body = newIdleBody(resp.Body, streamIdle, cancel)
 				var broke bool
 				if d != nil && resp.StatusCode == http.StatusOK {
 					broke = d.pass(w, resp, t, ri, stream)
@@ -308,7 +379,11 @@ func pass(w http.ResponseWriter, resp *http.Response, t target, ri *reqInfo) (pr
 			rc.Flush()
 		}
 		if err != nil {
-			return err != io.EOF && !errors.Is(err, context.Canceled)
+			if err == io.EOF {
+				// An event stream that ends with no [DONE] was cut off, even though the connection closed cleanly.
+				return strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") && !bytes.Contains(tail.b, []byte("[DONE]"))
+			}
+			return !errors.Is(err, context.Canceled)
 		}
 	}
 }
@@ -355,6 +430,8 @@ func main() {
 		log.Printf("prices: %d entries from %s", len(prices), pf)
 	}
 	g := loadGuard(addr)
+	maxBody = int64(envFloat("MAX_BODY_MB", 4) * (1 << 20))
+	streamIdle = time.Duration(envFloat("STREAM_IDLE_SEC", 120)) * time.Second
 	var fs []string
 	for _, f := range pol.filters {
 		fs = append(fs, f.name)

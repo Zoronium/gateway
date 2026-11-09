@@ -52,7 +52,9 @@ type reqInfo struct {
 	id, model, provider, result string
 	used                        string // provider/model that answered
 	inTok, outTok               int
-	estIn                       int // request bytes over four: charged when the provider reports no tokens
+	estIn                       int     // request bytes over four: charged when the provider reports no tokens
+	maxOut                      int     // the output cap the request allows: charged, with estIn, when the provider reports no tokens
+	reserved                    float64 // dollars held against the key's budget until the request ends
 	v                           verdict
 	flagged                     bool
 	ttfb                        int64
@@ -82,6 +84,15 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// writeStall is how long one write to the client may block. A client that stops reading would otherwise hold
+// its slot until the connection dies. The deadline is cleared when the request ends (see logged).
+const writeStall = 30 * time.Second
+
+func (w *statusWriter) Write(p []byte) (int, error) {
+	http.NewResponseController(w.ResponseWriter).SetWriteDeadline(time.Now().Add(writeStall))
+	return w.ResponseWriter.Write(p)
+}
+
 // Unwrap lets http.NewResponseController reach the real writer to flush streamed answers.
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
@@ -99,6 +110,7 @@ func logged(st *store, next http.HandlerFunc) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		start := time.Now()
 		next(sw, r.WithContext(context.WithValue(r.Context(), infoKey, ri)))
+		http.NewResponseController(w).SetWriteDeadline(time.Time{}) // a kept-alive connection must not carry the stall deadline into its next request
 		result := ri.result
 		if result == "" {
 			result = "ok"
@@ -110,15 +122,17 @@ func logged(st *store, next http.HandlerFunc) http.Handler {
 			Result: result, Flagged: ri.flagged, Filter: ri.v.filter, Rule: ri.v.rule, Score: ri.v.score,
 			TTFBMS: ri.ttfb, TotalMS: time.Since(start).Milliseconds(), InTok: ri.inTok, OutTok: ri.outTok}
 		if ri.used != "" && ri.inTok+ri.outTok == 0 {
-			// The provider reported nothing: a client hung up before the final usage chunk, or the provider sends none.
-			// Charge the input at four bytes a token rather than book the request as free.
+			// The provider reported nothing: a client hung up before the final usage chunk, the stream was cut off,
+			// or the provider sends none. Charge the worst case (the input at four bytes a token, plus the most the
+			// request allowed it to generate) rather than book it as free, so hanging up cannot dodge the budget.
 			e.InTok, ri.inTok = ri.estIn, ri.estIn
+			e.OutTok, ri.outTok = ri.maxOut, ri.maxOut
 		}
 		if p, ok := priceOf(ri.used); ok && ri.used != "" {
 			e.CostUSD = math.Round(p.cost(ri.inTok, ri.outTok)*1e6) / 1e6
-			if k := identOf(r).Key; k != nil && e.CostUSD > 0 {
-				st.keys.addSpend(k.ID, e.CostUSD)
-			}
+		}
+		if k := identOf(r).Key; k != nil && (e.CostUSD > 0 || ri.reserved > 0) {
+			st.keys.settle(k.ID, ri.reserved, e.CostUSD) // releases the hold, books the real cost (0 if nothing was sent)
 		}
 		if e.Score < 0.01 { // nothing matched: keep the line short
 			e.Filter, e.Rule, e.Score = "", "", 0

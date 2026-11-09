@@ -30,16 +30,17 @@ type bucket struct {
 }
 
 type keyring struct {
-	st      *store
-	mu      sync.Mutex
-	byHash  map[string]*keyRec // active keys only
-	buckets map[string]*bucket
-	spent   map[string]float64 // dollars this month, by key id
-	month   time.Time          // the month spent covers
+	st       *store
+	mu       sync.Mutex
+	byHash   map[string]*keyRec // active keys only
+	buckets  map[string]*bucket
+	spent    map[string]float64 // dollars this month, by key id
+	reserved map[string]float64 // worst-case dollars held for requests still running, by key id
+	month    time.Time          // the month spent covers
 }
 
 func newKeyring(st *store) *keyring {
-	return &keyring{st: st, byHash: map[string]*keyRec{}, buckets: map[string]*bucket{}, spent: map[string]float64{}, month: monthStart(time.Now())}
+	return &keyring{st: st, byHash: map[string]*keyRec{}, buckets: map[string]*bucket{}, spent: map[string]float64{}, reserved: map[string]float64{}, month: monthStart(time.Now())}
 }
 
 func hashKey(secret string) string {
@@ -196,8 +197,32 @@ func (k *keyring) addSpend(id string, usd float64) {
 	k.spent[id] += usd
 }
 
-// overBudget reports whether the key has used up its monthly budget. Requests already running when it
-// crosses the line still finish, so a key can overshoot by what its in-flight requests cost.
+// reserve holds back usd, the worst case for one request, against the key's budget. It says no when what is
+// already spent, plus what running requests may still cost, plus this request would pass the budget.
+func (k *keyring) reserve(r *keyRec, usd float64) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.rollMonth(time.Now())
+	if k.spent[r.ID]+k.reserved[r.ID]+usd > r.BudgetUSD {
+		return false
+	}
+	k.reserved[r.ID] += usd
+	return true
+}
+
+// settle gives back a reservation and books what the request really cost.
+func (k *keyring) settle(id string, held, actual float64) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.rollMonth(time.Now())
+	if k.reserved[id] -= held; k.reserved[id] < 1e-9 {
+		delete(k.reserved, id) // also clears float drift
+	}
+	k.spent[id] += actual
+}
+
+// overBudget reports whether the key has used up its monthly budget. A request that fits when it starts is
+// held for its worst case (see reserve), so running requests cannot together pass the budget.
 func (k *keyring) overBudget(r *keyRec) bool {
 	return r.BudgetUSD > 0 && k.spentThisMonth(r.ID) >= r.BudgetUSD
 }

@@ -39,12 +39,20 @@ func spendStack(t *testing.T, dbPath string) (*httptest.Server, *store, *string)
 	return gw, st, seen
 }
 
+// small is a chat body that may generate at most 10 tokens, so its worst case is about $0.03 at the test prices.
+// Without max_tokens the gateway assumes 4096, which would not fit the tiny budgets used here.
+func small(model string) string {
+	return `{"model":"` + model + `","max_tokens":10,"messages":[{"role":"user","content":"hello"}]}`
+}
+
 func TestBudgetStopsAKey(t *testing.T) {
 	gw, st, _ := spendStack(t, filepath.Join(t.TempDir(), "t.db"))
-	_, secret := newKey(t, gw, `{"name":"capped","budget_usd":0.03}`)
+	_, secret := newKey(t, gw, `{"name":"capped","budget_usd":0.06}`)
 
-	for i, want := range []int{200, 200, 403} { // 0.02, then 0.04 (over 0.03), then refused
-		code, body := do(t, gw, "POST", "/v1/chat/completions", secret, chat("fake/m"))
+	// Each request really costs 0.02 and is held at about 0.031 while it runs. After two (0.04 spent) a third
+	// cannot be held under 0.06, so it is refused before it is sent.
+	for i, want := range []int{200, 200, 403} {
+		code, body := do(t, gw, "POST", "/v1/chat/completions", secret, small("fake/m"))
 		if code != want {
 			t.Fatalf("request %d: status %d, want %d: %s", i+1, code, want, body)
 		}
@@ -99,7 +107,7 @@ func TestStreamedUsageCountsAndSurvivesRestart(t *testing.T) {
 	db := filepath.Join(t.TempDir(), "t.db")
 	gw, st, seen := spendStack(t, db)
 	_, secret := newKey(t, gw, `{"name":"s","budget_usd":1}`)
-	code, _ := do(t, gw, "POST", "/v1/chat/completions", secret, `{"model":"fake/m","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	code, _ := do(t, gw, "POST", "/v1/chat/completions", secret, `{"model":"fake/m","stream":true,"max_tokens":10,"messages":[{"role":"user","content":"hi"}]}`)
 	if code != 200 || !strings.Contains(*seen, "include_usage") {
 		t.Fatalf("stream: %d, upstream stream_options = %q", code, *seen)
 	}

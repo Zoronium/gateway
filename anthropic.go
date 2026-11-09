@@ -263,6 +263,7 @@ func anthropicPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 		tool          = -1 // the provider's index of the open tool call
 		finish        string
 		usage         chatUsage
+		done          bool // saw [DONE] or a finish_reason: the provider ended the answer on purpose
 	)
 	closeBlock := func() {
 		if open {
@@ -286,6 +287,7 @@ func anthropicPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 		}
 		data = strings.TrimSpace(data)
 		if data == "[DONE]" {
+			done = true
 			break
 		}
 		var c struct {
@@ -314,7 +316,7 @@ func anthropicPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 		}
 		for _, ch := range c.Choices {
 			if ch.FinishReason != "" {
-				finish = ch.FinishReason
+				finish, done = ch.FinishReason, true
 			}
 			if s := ch.Delta.Content; s != "" {
 				if !open || kind != "text" {
@@ -342,8 +344,10 @@ func anthropicPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 	}
 	ri.inTok, ri.outTok = usage.PromptTokens, usage.CompletionTokens
 	err := sc.Err()
-	if err != nil && !errors.Is(err, context.Canceled) {
+	// A stream that just stops, with no finish_reason and no [DONE], was cut off: say so, never pass it off as finished.
+	if (err != nil && !errors.Is(err, context.Canceled)) || (err == nil && !done) {
 		start()
+		closeBlock()
 		send("error", map[string]any{"error": map[string]any{"type": "api_error", "message": "The provider's stream broke."}})
 		return true
 	}

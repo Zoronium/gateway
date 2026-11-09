@@ -91,6 +91,10 @@ func TestAbortedStreamIsCharged(t *testing.T) {
 			if st.keys.spentThisMonth(id) == 0 {
 				t.Fatal("an aborted stream was booked as free")
 			}
+			// worst case: the input plus max_tokens (50) at $1000 per million is at least $0.05
+			if got := st.keys.spentThisMonth(id); got < 0.05 {
+				t.Fatalf("an aborted stream was charged %v, want at least its max_tokens worth (0.05)", got)
+			}
 		})
 	}
 }

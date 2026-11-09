@@ -256,6 +256,7 @@ func responsesPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 		tool    = -1            // the provider's index of the open tool call
 		usage   chatUsage
 		idx     = -1
+		done    bool // saw [DONE] or a finish_reason: the provider ended the answer on purpose
 	)
 	closeItem := func() {
 		switch kind {
@@ -289,6 +290,7 @@ func responsesPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 		}
 		data = strings.TrimSpace(data)
 		if data == "[DONE]" {
+			done = true
 			break
 		}
 		var c struct {
@@ -304,6 +306,7 @@ func responsesPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 						} `json:"function"`
 					} `json:"tool_calls"`
 				} `json:"delta"`
+				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
 			Usage *chatUsage `json:"usage"`
 		}
@@ -315,6 +318,9 @@ func responsesPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 			usage = *c.Usage
 		}
 		for _, ch := range c.Choices {
+			if ch.FinishReason != "" {
+				done = true
+			}
 			if s := ch.Delta.Content; s != "" {
 				if kind != "text" {
 					closeItem()
@@ -343,7 +349,8 @@ func responsesPass(w http.ResponseWriter, resp *http.Response, t target, ri *req
 		}
 	}
 	ri.inTok, ri.outTok = usage.PromptTokens, usage.CompletionTokens
-	if err := sc.Err(); err != nil && !errors.Is(err, context.Canceled) {
+	// A stream that just stops, with no finish_reason and no [DONE], was cut off: say so, never pass it off as finished.
+	if err := sc.Err(); (err != nil && !errors.Is(err, context.Canceled)) || (err == nil && !done) {
 		start()
 		r := envelope("failed", output, usage)
 		r["error"] = map[string]any{"code": "provider_stream_error", "message": "The provider's stream broke."}
